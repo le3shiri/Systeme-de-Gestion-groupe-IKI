@@ -126,7 +126,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
 </head>
 <body class="dashboard-page">
     <!-- Top Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark <?php echo $navbar_color; ?> fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top border-bottom shadow-sm <?php echo $navbar_color; ?> ">
         <div class="container-fluid">
             <!-- Brand -->
             <a class="navbar-brand d-flex align-items-center" href="<?php echo $dashboard_link; ?>">

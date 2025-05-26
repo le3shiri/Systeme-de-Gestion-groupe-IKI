@@ -93,7 +93,7 @@ if ($user_role === 'admin') {
 </head>
 <body class="dashboard-page">
     <!-- Top Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark <?php echo $navbar_color; ?> fixed-top">
+    <nav class="navbar navbar-expand-lg  <?php echo $navbar_color; ?> navbar-light bg-white fixed-top border-bottom shadow-sm">
         <div class="container-fluid">
             <!-- Brand -->
             <a class="navbar-brand d-flex align-items-center" href="<?php echo $dashboard_link; ?>">
