@@ -59,7 +59,7 @@ try {
 </head>
 <body class="dashboard-page">
     <!-- Top Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-info fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top border-bottom shadow-sm">
         <div class="container-fluid">
             <!-- Brand -->
             <a class="navbar-brand d-flex align-items-center" href="dashboard_student.php">
