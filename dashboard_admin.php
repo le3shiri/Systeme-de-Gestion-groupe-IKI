@@ -6,7 +6,7 @@ if (!isset($_SESSION['user_cni']) || $_SESSION['role'] !== 'admin') {
     header('Location: login.php');
     exit();
 }
-
+// check role
 $user_cni = $_SESSION['user_cni'];
 
 // Database connection to get admin details
