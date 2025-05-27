@@ -293,6 +293,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
         JOIN filieres f ON tma.filiere_id = f.id
         LEFT JOIN students s ON s.filiere_id = f.id
         WHERE tma.teacher_cni = ? AND tma.is_active = TRUE
+        AND m.type NOT IN ('pfe', 'stage')
         GROUP BY tma.module_id, tma.filiere_id
         ORDER BY f.name, m.name
     ");
@@ -377,6 +378,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                         FROM modules m
                                         JOIN filieres f ON m.filiere_id = f.id
                                         LEFT JOIN students s ON s.filiere_id = f.id
+                                        WHERE m.type NOT IN ('pfe', 'stage')
                                         GROUP BY m.id, f.id
                                         ORDER BY f.name, m.name
                                     ");

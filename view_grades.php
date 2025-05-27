@@ -10,6 +10,12 @@ if (!isset($_SESSION['user_cni'])) {
 $user_cni = $_SESSION['user_cni'];
 $user_role = $_SESSION['role'];
 
+// Redirect non-students to dashboard
+if ($user_role !== 'student') {
+    header('Location: ' . ($user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_teacher.php'));
+    exit();
+}
+
 // Database connection
 $host = 'localhost';
 $dbname = 'groupe_iki';
@@ -21,58 +27,72 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     $grades = [];
+    $modules = [];
+    $student_info = null;
     
-    if ($user_role === 'student') {
-        // Get student's grades
+    // Get student information
+    $stmt = $pdo->prepare("
+        SELECT s.id, s.prenom, s.nom, s.cni, f.id as filiere_id, f.name as filiere_name
+        FROM students s
+        JOIN filieres f ON s.filiere_id = f.id
+        WHERE s.cni = ?
+    ");
+    $stmt->execute([$user_cni]);
+    $student_info = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($student_info) {
+        // Get all modules for the student's filiere
         $stmt = $pdo->prepare("
-            SELECT g.grade, g.date, m.name as module_name, f.name as filiere_name,
-                   CONCAT(t.prenom, ' ', t.nom) as teacher_name
+            SELECT id, name, type
+            FROM modules
+            WHERE filiere_id = ?
+            ORDER BY name
+        ");
+        $stmt->execute([$student_info['filiere_id']]);
+        $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Get all grades for the student
+        $stmt = $pdo->prepare("
+            SELECT g.module_id, g.grade_type, g.grade, g.date,
+                   m.name as module_name, m.type as module_type,
+                   f.name as filiere_name
             FROM grades g
-            JOIN students s ON g.student_id = s.id
             JOIN modules m ON g.module_id = m.id
             JOIN filieres f ON m.filiere_id = f.id
-            LEFT JOIN teachers t ON g.recorded_by_teacher_id = t.id
-            WHERE s.cni = ?
-            ORDER BY g.date DESC
+            WHERE g.student_id = ?
+            ORDER BY m.name, g.grade_type
         ");
-        $stmt->execute([$user_cni]);
-        $grades = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } elseif ($user_role === 'teacher' || $user_role === 'admin') {
-        // Get all grades (for teachers and admins)
-        $stmt = $pdo->prepare("
-            SELECT g.grade, g.date, m.name as module_name, f.name as filiere_name,
-                   CONCAT(s.prenom, ' ', s.nom) as student_name, s.cni as student_cni,
-                   CONCAT(t.prenom, ' ', t.nom) as teacher_name
-            FROM grades g
-            JOIN students s ON g.student_id = s.id
-            JOIN modules m ON g.module_id = m.id
-            JOIN filieres f ON m.filiere_id = f.id
-            LEFT JOIN teachers t ON g.recorded_by_teacher_id = t.id
-            ORDER BY g.date DESC
-            LIMIT 100
-        ");
-        $stmt->execute();
-        $grades = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->execute([$student_info['id']]);
+        
+        // Organize grades by module and grade type
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $grades[$row['module_id']][$row['grade_type']] = [
+                'grade' => $row['grade'],
+                'date' => $row['date'],
+                'module_name' => $row['module_name'],
+                'module_type' => $row['module_type'],
+                'filiere_name' => $row['filiere_name']
+            ];
+        }
     }
     
 } catch (PDOException $e) {
-    $error_message = 'Database connection failed.';
+    $error_message = 'Database error: ' . $e->getMessage();
 }
 
-// Determine dashboard link and navbar color based on role
+// Helper function to determine badge color based on grade
+function getBadgeColor($grade) {
+    if ($grade >= 16) return 'bg-success';
+    if ($grade >= 14) return 'bg-info';
+    if ($grade >= 12) return 'bg-primary';
+    if ($grade >= 10) return 'bg-warning';
+    return 'bg-danger';
+}
+
+// Dashboard link and navbar color for student
 $dashboard_link = 'dashboard_student.php';
 $navbar_color = 'bg-info';
 $user_icon = 'fa-user-graduate';
-
-if ($user_role === 'admin') {
-    $dashboard_link = 'dashboard_admin.php';
-    $navbar_color = 'bg-primary';
-    $user_icon = 'fa-user-shield';
-} elseif ($user_role === 'teacher') {
-    $dashboard_link = 'dashboard_teacher.php';
-    $navbar_color = 'bg-success';
-    $user_icon = 'fa-chalkboard-teacher';
-}
 ?>
 
 <!DOCTYPE html>
@@ -80,7 +100,7 @@ if ($user_role === 'admin') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>View Grades - Groupe IKI</title>
+    <title>My Grades - Groupe IKI</title>
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -90,6 +110,12 @@ if ($user_role === 'admin') {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
     <link href="css/styles.css" rel="stylesheet">
+    <style>
+        .grade-badge {
+            min-width: 60px;
+            font-size: 0.9rem;
+        }
+    </style>
 </head>
 <body class="dashboard-page">
     <!-- Top Navbar -->
@@ -97,8 +123,6 @@ if ($user_role === 'admin') {
         <div class="container-fluid">
             <!-- Brand -->
             <a class="navbar-brand d-flex align-items-center" href="<?php echo $dashboard_link; ?>">
-                <!-- <i class="fas fa-graduation-cap me-2"></i> -->
-                <!-- <span class="fw-bold">Groupe IKI</span> -->
                 <img src="assets/logo-circle.jpg" alt="" width="120px">
             </a>
 
@@ -113,7 +137,7 @@ if ($user_role === 'admin') {
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas <?php echo $user_icon; ?> me-2"></i>
-                            <?php echo ucfirst($user_role); ?> (<?php echo htmlspecialchars($user_cni); ?>)
+                            Student (<?php echo htmlspecialchars($user_cni); ?>)
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="logout.php">
@@ -139,42 +163,6 @@ if ($user_role === 'admin') {
                             </a>
                         </li>
                         
-                        <?php if ($user_role === 'admin'): ?>
-                        <li class="nav-item">
-                            <a class="nav-link" href="manage_users.php">
-                                <i class="fas fa-users me-2"></i>
-                                Manage Users
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="manage_filieres_modules.php">
-                                <i class="fas fa-book me-2"></i>
-                                Filières & Modules
-                            </a>
-                        </li>
-                        <?php endif; ?>
-                        
-                        <?php if ($user_role === 'admin' || $user_role === 'teacher'): ?>
-                        <li class="nav-item">
-                            <a class="nav-link" href="manage_grades.php">
-                                <i class="fas fa-chart-line me-2"></i>
-                                Manage Grades
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="record_absence.php">
-                                <i class="fas fa-calendar-check me-2"></i>
-                                Manage Absences
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="send_message.php">
-                                <i class="fas fa-paper-plane me-2"></i>
-                                Send Messages
-                            </a>
-                        </li>
-                        <?php endif; ?>
-                        
                         <li class="nav-item">
                             <a class="nav-link active" href="view_grades.php">
                                 <i class="fas fa-chart-line me-2"></i>
@@ -182,14 +170,12 @@ if ($user_role === 'admin') {
                             </a>
                         </li>
                         
-                        <?php if ($user_role === 'student'): ?>
                         <li class="nav-item">
                             <a class="nav-link" href="student_absences.php">
                                 <i class="fas fa-calendar-check me-2"></i>
                                 View Absences
                             </a>
                         </li>
-                        <?php endif; ?>
                         
                         <li class="nav-item">
                             <a class="nav-link" href="view_messages.php">
@@ -206,7 +192,7 @@ if ($user_role === 'admin') {
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
                         <i class="fas fa-chart-line me-2"></i>
-                        <?php echo $user_role === 'student' ? 'My Grades' : 'All Grades'; ?>
+                        My Grades
                     </h1>
                     <button class="btn btn-outline-primary d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar">
                         <i class="fas fa-bars"></i>
@@ -220,119 +206,178 @@ if ($user_role === 'admin') {
                 </div>
                 <?php endif; ?>
 
+                <!-- Student Information -->
+                <?php if ($student_info): ?>
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-user-graduate me-2"></i>
+                            Student Information
+                        </h5>
+                        <span class="badge bg-info">
+                            <?php echo htmlspecialchars($student_info['filiere_name']); ?>
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Name:</strong> <?php echo htmlspecialchars($student_info['prenom'] . ' ' . $student_info['nom']); ?></p>
+                                <p><strong>CNI:</strong> <?php echo htmlspecialchars($student_info['cni']); ?></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Filière:</strong> <?php echo htmlspecialchars($student_info['filiere_name']); ?></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <!-- Grades Table -->
+                <?php if (!empty($grades)): ?>
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-list me-2"></i>
-                            Grades Overview
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-bar me-2"></i>
+                            Your Grades
                         </h5>
                     </div>
                     <div class="card-body">
-                        <?php if (empty($grades)): ?>
-                        <div class="text-center py-5">
-                            <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">No grades found</h5>
-                            <p class="text-muted">
-                                <?php echo $user_role === 'student' ? 'You don\'t have any grades yet.' : 'No grades have been recorded yet.'; ?>
-                            </p>
-                        </div>
-                        <?php else: ?>
                         <div class="table-responsive">
                             <table class="table table-hover">
-                                <thead class="table-primary">
+                                <thead class="table-light">
                                     <tr>
-                                        <?php if ($user_role !== 'student'): ?>
-                                        <th>Student</th>
-                                        <th>CNI</th>
-                                        <?php endif; ?>
                                         <th>Module</th>
-                                        <th>Filière</th>
-                                        <th>Grade</th>
-                                        <th>Date</th>
-                                        <!-- <th>Recorded By</th> -->
+                                        <th>Type</th>
+                                        <th>CC1</th>
+                                        <th>CC2</th>
+                                        <th>CC3</th>
+                                        <th>Théorique</th>
+                                        <th>Pratique</th>
+                                        <th>Final</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($grades as $grade): ?>
+                                    <?php foreach ($grades as $module_id => $module_grades): 
+                                        $module_name = $module_grades[array_key_first($module_grades)]['module_name'] ?? 'Unknown';
+                                        $module_type = $module_grades[array_key_first($module_grades)]['module_type'] ?? 'standard';
+                                    ?>
                                     <tr>
-                                        <?php if ($user_role !== 'student'): ?>
-                                        <td><?php echo htmlspecialchars($grade['student_name']); ?></td>
-                                        <td><?php echo htmlspecialchars($grade['student_cni']); ?></td>
-                                        <?php endif; ?>
+                                        <td><?php echo htmlspecialchars($module_name); ?></td>
                                         <td>
-                                            <i class="fas fa-book me-2 text-primary"></i>
-                                            <?php echo htmlspecialchars($grade['module_name']); ?>
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-secondary">
-                                                <?php echo htmlspecialchars($grade['filiere_name']); ?>
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <?php
-                                            $gradeValue = floatval($grade['grade']);
-                                            $badgeClass = 'bg-danger';
-                                            if ($gradeValue >= 16) $badgeClass = 'bg-success';
-                                            elseif ($gradeValue >= 12) $badgeClass = 'bg-warning';
-                                            elseif ($gradeValue >= 10) $badgeClass = 'bg-info';
-                                            ?>
-                                            <span class="badge <?php echo $badgeClass; ?> fs-6">
-                                                <?php echo number_format($gradeValue, 2); ?>/20
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <i class="fas fa-calendar me-2 text-muted"></i>
-                                            <?php echo date('d/m/Y', strtotime($grade['date'])); ?>
-                                        </td>
-                                        <!-- <td>
-                                            <?php if ($grade['teacher_name']): ?>
-                                                <i class="fas fa-chalkboard-teacher me-2 text-success"></i>
-                                                <?php echo htmlspecialchars($grade['teacher_name']); ?>
+                                            <?php if ($module_type === 'pfe'): ?>
+                                            <span class="badge bg-primary">PFE</span>
+                                            <?php elseif ($module_type === 'stage'): ?>
+                                            <span class="badge bg-success">Stage</span>
                                             <?php else: ?>
-                                                <span class="text-muted">N/A</span>
+                                            <span class="badge bg-secondary">Standard</span>
                                             <?php endif; ?>
-                                        </td> -->
+                                        </td>
+                                        <td>
+                                            <?php if (isset($module_grades['cc1'])): ?>
+                                            <span class="badge <?php echo getBadgeColor($module_grades['cc1']['grade']); ?> grade-badge">
+                                                <?php echo number_format($module_grades['cc1']['grade'], 2); ?>
+                                            </span>
+                                            <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if (isset($module_grades['cc2'])): ?>
+                                            <span class="badge <?php echo getBadgeColor($module_grades['cc2']['grade']); ?> grade-badge">
+                                                <?php echo number_format($module_grades['cc2']['grade'], 2); ?>
+                                            </span>
+                                            <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if (isset($module_grades['cc3'])): ?>
+                                            <span class="badge <?php echo getBadgeColor($module_grades['cc3']['grade']); ?> grade-badge">
+                                                <?php echo number_format($module_grades['cc3']['grade'], 2); ?>
+                                            </span>
+                                            <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if (isset($module_grades['theorique'])): ?>
+                                            <span class="badge <?php echo getBadgeColor($module_grades['theorique']['grade']); ?> grade-badge">
+                                                <?php echo number_format($module_grades['theorique']['grade'], 2); ?>
+                                            </span>
+                                            <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if (isset($module_grades['pratique'])): ?>
+                                            <span class="badge <?php echo getBadgeColor($module_grades['pratique']['grade']); ?> grade-badge">
+                                                <?php echo number_format($module_grades['pratique']['grade'], 2); ?>
+                                            </span>
+                                            <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if (isset($module_grades['pfe']) || isset($module_grades['stage'])): ?>
+                                            <span class="badge <?php echo getBadgeColor($module_grades[$module_type]['grade']); ?> grade-badge">
+                                                <?php echo number_format($module_grades[$module_type]['grade'], 2); ?>
+                                            </span>
+                                            <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                     <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
                         
-                        <?php if ($user_role === 'student' && !empty($grades)): ?>
-                        <!-- Grade Statistics for Students -->
+                        <!-- Grade Statistics -->
                         <div class="row mt-4">
                             <div class="col-md-12">
                                 <h6 class="mb-3">Grade Statistics</h6>
                             </div>
                             <?php
-                            $totalGrades = count($grades);
-                            $sumGrades = array_sum(array_column($grades, 'grade'));
-                            $averageGrade = $totalGrades > 0 ? $sumGrades / $totalGrades : 0;
-                            $passedGrades = count(array_filter($grades, function($g) { return floatval($g['grade']) >= 10; }));
-                            $passRate = $totalGrades > 0 ? ($passedGrades / $totalGrades) * 100 : 0;
+                            // Calculate statistics
+                            $moduleCount = count($grades);
+                            $passedModules = 0;
+                            
+                            foreach ($grades as $module_id => $module_grades) {
+                                $module_type = $module_grades[array_key_first($module_grades)]['module_type'] ?? 'standard';
+                                
+                                // Check if module is passed
+                                $passed = false;
+                                if ($module_type === 'pfe' || $module_type === 'stage') {
+                                    if (isset($module_grades[$module_type]['grade']) && $module_grades[$module_type]['grade'] >= 10) {
+                                        $passed = true;
+                                    }
+                                } else {
+                                    // For standard modules, check if theoretical exam is passed
+                                    if (isset($module_grades['theorique']['grade']) && $module_grades['theorique']['grade'] >= 10) {
+                                        $passed = true;
+                                    }
+                                }
+                                
+                                if ($passed) {
+                                    $passedModules++;
+                                }
+                            }
+                            
+                            $passRate = $moduleCount > 0 ? ($passedModules / $moduleCount) * 100 : 0;
                             ?>
+                            
                             <div class="col-md-4">
                                 <div class="card bg-primary text-white">
                                     <div class="card-body text-center">
-                                        <h5><?php echo $totalGrades; ?></h5>
-                                        <small>Total Grades</small>
+                                        <h5><?php echo $moduleCount; ?></h5>
+                                        <small>Total Modules</small>
                                     </div>
                                 </div>
                             </div>
-                            <!-- <div class="col-md-3">
-                                <div class="card bg-info text-white">
-                                     <div class="card-body text-center">
-                                         <h5> -->
-                                        <!-- </h5> -->
-                                        <!-- <small>Average Grade</small> -->
-                                    <!-- </div>  -->
-                                <!-- </div> -->
-                            <!-- </div>  -->
                             <div class="col-md-4">
                                 <div class="card bg-success text-white">
                                     <div class="card-body text-center">
-                                        <h5><?php echo $passedGrades; ?></h5>
+                                        <h5><?php echo $passedModules; ?></h5>
                                         <small>Passed Modules</small>
                                     </div>
                                 </div>
@@ -346,10 +391,14 @@ if ($user_role === 'admin') {
                                 </div>
                             </div>
                         </div>
-                        <?php endif; ?>
-                        <?php endif; ?>
                     </div>
                 </div>
+                <?php else: ?>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    No grades have been recorded for you yet.
+                </div>
+                <?php endif; ?>
             </main>
         </div>
     </div>
