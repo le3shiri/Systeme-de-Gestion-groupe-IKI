@@ -136,13 +136,12 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
 </head>
 <body class="dashboard-page">
     <!-- Top Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top border-bottom shadow-sm<?php echo $navbar_color; ?> ">
+    <nav class="navbar navbar-expand-lg navbar-dark <?php echo $navbar_color; ?> fixed-top">
         <div class="container-fluid">
             <!-- Brand -->
             <a class="navbar-brand d-flex align-items-center" href="<?php echo $dashboard_link; ?>">
-                <!-- <i class="fas fa-graduation-cap me-2"></i> -->
-                <!-- <span class="fw-bold">Groupe IKI</span> -->
-                <img src="assets/logo-circle.jpg" alt="" width="120px">
+                <i class="fas fa-graduation-cap me-2"></i>
+                <span class="fw-bold">Groupe IKI</span>
             </a>
 
             <!-- Mobile Toggle -->
@@ -324,13 +323,22 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
     }
     
     // Get students from selected filière
-    $stmt = $pdo->prepare("
-        SELECT s.id, s.nom, s.prenom, s.cni, s.level
-        FROM students s 
-        WHERE s.filiere_id = ?
-        ORDER BY s.nom, s.prenom
-    ");
-    $stmt->execute([$filiere_id]);
+    $filiere_students = [];
+    $search_term = isset($_GET['search_student']) ? $_GET['search_student'] : '';
+    $module_filter = isset($_GET['filter_module']) ? $_GET['filter_module'] : '';
+
+    $sql = "SELECT s.id, s.nom, s.prenom, s.cni FROM students s WHERE s.filiere_id = ?";
+    $params = [$filiere_id];
+
+    if (!empty($search_term)) {
+        $sql .= " AND (s.nom LIKE ? OR s.prenom LIKE ? OR s.cni LIKE ?)";
+        $search_param = '%' . $search_term . '%';
+        $params = [$filiere_id, $search_param, $search_param, $search_param];
+    }
+
+    $sql .= " ORDER BY s.nom, s.prenom";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
     $filiere_students = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Get modules from selected filière
@@ -398,7 +406,6 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                             <?php foreach ($filiere_students as $student): ?>
                             <option value="<?php echo $student['id']; ?>">
                                 <?php echo htmlspecialchars($student['prenom'] . ' ' . $student['nom'] . ' (' . $student['cni'] . ')'); ?>
-                                - <?php echo htmlspecialchars($student['level']); ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
@@ -485,6 +492,36 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                 </span>
             </div>
             <div class="card-body">
+                <!-- Filter Form -->
+                <form method="GET" action="" class="mb-3">
+                    <input type="hidden" name="filiere_id" value="<?php echo $filiere_id; ?>">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="search_student" class="form-label">Search Student</label>
+                            <input type="text" class="form-control" id="search_student" name="search_student" value="<?php echo htmlspecialchars($search_term); ?>" placeholder="Name or CNI">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="filter_module" class="form-label">Filter by Module</label>
+                            <select class="form-select" id="filter_module" name="filter_module">
+                                <option value="">All Modules</option>
+                                <?php foreach ($filiere_modules as $module): ?>
+                                <option value="<?php echo $module['id']; ?>" <?php if ($module_filter == $module['id']) echo 'selected'; ?>>
+                                    <?php echo htmlspecialchars($module['name']); ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-filter me-2"></i>Apply Filters
+                            </button>
+                            <a href="manage_grades.php?filiere_id=<?php echo $filiere_id; ?>" class="btn btn-secondary ms-2">
+                                <i class="fas fa-times me-2"></i>Clear
+                            </a>
+                        </div>
+                    </div>
+                </form>
+
                 <?php if (empty($filiere_grades)): ?>
                 <div class="text-center py-5">
                     <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
@@ -581,3 +618,4 @@ function selectFiliere(filiereId) {
     <script src="js/scripts.js"></script>
 </body>
 </html>
+    

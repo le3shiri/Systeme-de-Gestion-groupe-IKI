@@ -644,6 +644,23 @@ if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delet
                             </div>
                         </div>
                     </div>
+                    <!-- Assign Modules Card -->
+                    <div class="col-md-4">
+                        <div class="card h-100 shadow-sm hover-card">
+                            <div class="card-body text-center p-4">
+                                <div class="mb-3">
+                                    <i class="fas fa-user-tie fa-3x text-warning"></i>
+                                </div>
+                                <h5 class="card-title text-warning mb-3">Assign Modules</h5>
+                                <p class="card-text text-muted mb-4">
+                                    Assign teachers to specific modules in filières.
+                                </p>
+                                <a href="?section=teachers&action=assign" class="btn btn-warning">
+                                    <i class="fas fa-user-tie me-2"></i>Manage Assignments
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <?php elseif ($current_section === 'students' && $current_action === 'add'): ?>
@@ -1585,6 +1602,422 @@ if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delet
                         <?php endif; ?>
                     </div>
                 </div>
+
+                <?php elseif ($current_section === 'teachers' && $current_action === 'assign'): ?>
+                <!-- Teacher Assignment Management -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="text-warning">
+                        <i class="fas fa-user-tie me-2"></i>
+                        Teacher Module Assignments
+                    </h2>
+                    <a href="?section=teachers" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Teacher Management
+                    </a>
+                </div>
+
+                <?php
+                // Check if teacher_module_assignments table exists, if not create it
+                try {
+                    $stmt = $pdo->query("SHOW TABLES LIKE 'teacher_module_assignments'");
+                    if ($stmt->rowCount() == 0) {
+                        // Create the table
+                        $pdo->exec("
+                            CREATE TABLE teacher_module_assignments (
+                                id INT PRIMARY KEY AUTO_INCREMENT,
+                                teacher_cni VARCHAR(50) NOT NULL,
+                                module_id INT NOT NULL,
+                                filiere_id INT NOT NULL,
+                                assigned_date DATE DEFAULT (CURRENT_DATE),
+                                is_active BOOLEAN DEFAULT TRUE,
+                                FOREIGN KEY (teacher_cni) REFERENCES teachers(cni) ON DELETE CASCADE,
+                                FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE,
+                                FOREIGN KEY (filiere_id) REFERENCES filieres(id) ON DELETE CASCADE,
+                                UNIQUE KEY unique_assignment (teacher_cni, module_id, filiere_id)
+                            )
+                        ");
+                        $success_message = 'Teacher assignments table created successfully!';
+                    }
+                } catch (PDOException $e) {
+                    $error_message = 'Error creating assignments table: ' . $e->getMessage();
+                }
+
+                // Handle assignment form submission
+                if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_teacher'])) {
+                    $teacher_cni = trim($_POST['teacher_cni'] ?? '');
+                    $module_id = intval($_POST['module_id'] ?? 0);
+                    $filiere_id = intval($_POST['filiere_id'] ?? 0);
+                    
+                    if (empty($teacher_cni) || empty($module_id) || empty($filiere_id)) {
+                        $error_message = 'Please fill in all required fields.';
+                    } else {
+                        try {
+                            // Check if module belongs to the selected filiere
+                            $stmt = $pdo->prepare("SELECT id FROM modules WHERE id = ? AND filiere_id = ?");
+                            $stmt->execute([$module_id, $filiere_id]);
+                            
+                            if ($stmt->rowCount() == 0) {
+                                $error_message = 'Selected module does not belong to the selected filière.';
+                            } else {
+                                // Insert assignment
+                                $stmt = $pdo->prepare("
+                                    INSERT INTO teacher_module_assignments (teacher_cni, module_id, filiere_id) 
+                                    VALUES (?, ?, ?)
+                                ");
+                                $stmt->execute([$teacher_cni, $module_id, $filiere_id]);
+                                $success_message = 'Teacher assignment created successfully!';
+                            }
+                            
+                        } catch (PDOException $e) {
+                            if ($e->getCode() == 23000) {
+                                $error_message = 'This teacher is already assigned to this module in this filière.';
+                            } else {
+                                $error_message = 'Error creating assignment: ' . $e->getMessage();
+                            }
+                        }
+                    }
+                }
+
+                // Handle remove assignment
+                if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['remove_assignment'])) {
+                    $assignment_id = intval($_POST['assignment_id'] ?? 0);
+                    
+                    if (empty($assignment_id)) {
+                        $error_message = 'Invalid assignment ID.';
+                    } else {
+                        try {
+                            $stmt = $pdo->prepare("DELETE FROM teacher_module_assignments WHERE id = ?");
+                            $stmt->execute([$assignment_id]);
+                            $success_message = 'Assignment removed successfully!';
+                            
+                        } catch (PDOException $e) {
+                            $error_message = 'Error removing assignment: ' . $e->getMessage();
+                        }
+                    }
+                }
+
+                // Get current assignments
+                try {
+                    $stmt = $pdo->query("
+                        SELECT 
+                            tma.id,
+                            tma.teacher_cni,
+                            tma.assigned_date,
+                            t.nom as teacher_nom,
+                            t.prenom as teacher_prenom,
+                            m.name as module_name,
+                            f.name as filiere_name
+                        FROM teacher_module_assignments tma
+                        JOIN teachers t ON tma.teacher_cni = t.cni
+                        JOIN modules m ON tma.module_id = m.id
+                        JOIN filieres f ON tma.filiere_id = f.id
+                        WHERE tma.is_active = TRUE
+                        ORDER BY t.nom, t.prenom, f.name, m.name
+                    ");
+                    $assignments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } catch (PDOException $e) {
+                    $assignments = [];
+                }
+                ?>
+
+                <div class="row">
+                    <!-- Assignment Form -->
+                    <div class="col-lg-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-plus me-2"></i>
+                                    Assign Teacher to Module
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" action="?section=teachers&action=assign" id="assignmentForm">
+                                    <input type="hidden" name="assign_teacher" value="1">
+                                    
+                                    <div class="mb-3">
+                                        <label for="teacher_cni" class="form-label">
+                                            <i class="fas fa-chalkboard-teacher me-2"></i>Teacher *
+                                        </label>
+                                        <select class="form-select" id="teacher_cni" name="teacher_cni" required>
+                                            <option value="">Select Teacher</option>
+                                            <?php
+                                            // Get all teachers for assignment
+                                            try {
+                                                $stmt = $pdo->query("SELECT cni, nom, prenom FROM teachers ORDER BY nom, prenom");
+                                                $all_teachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                                                foreach ($all_teachers as $teacher): ?>
+                                                <option value="<?php echo htmlspecialchars($teacher['cni']); ?>">
+                                                    <?php echo htmlspecialchars($teacher['prenom'] . ' ' . $teacher['nom'] . ' (' . $teacher['cni'] . ')'); ?>
+                                                </option>
+                                                <?php endforeach;
+                                            } catch (PDOException $e) {
+                                                // Handle error silently
+                                            }
+                                            ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="assignment_filiere_id" class="form-label">
+                                            <i class="fas fa-graduation-cap me-2"></i>Filière *
+                                        </label>
+                                        <select class="form-select" id="assignment_filiere_id" name="filiere_id" required onchange="updateAssignmentModules()">
+                                            <option value="">Select Filière</option>
+                                            <?php foreach ($filieres as $filiere): ?>
+                                            <option value="<?php echo $filiere['id']; ?>">
+                                                <?php echo htmlspecialchars($filiere['name']); ?>
+                                            </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="assignment_module_id" class="form-label">
+                                            <i class="fas fa-book me-2"></i>Module *
+                                        </label>
+                                        <select class="form-select" id="assignment_module_id" name="module_id" required disabled>
+                                            <option value="">Select Filière first</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="d-grid">
+                                        <button type="submit" class="btn btn-warning">
+                                            <i class="fas fa-plus me-2"></i>Assign Teacher
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Current Assignments -->
+                    <div class="col-lg-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-list me-2"></i>
+                                    Current Teacher Assignments
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($assignments)): ?>
+                                <div class="text-center py-5">
+                                    <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
+                                    <h5 class="text-muted">No teacher assignments found</h5>
+                                    <p class="text-muted">Start by assigning teachers to modules.</p>
+                                </div>
+                                <?php else: ?>
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead class="table-warning">
+                                            <tr>
+                                                <th>Teacher</th>
+                                                <th>Filière</th>
+                                                <th>Module</th>
+                                                <th>Assigned Date</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($assignments as $assignment): ?>
+                                            <tr>
+                                                <td>
+                                                    <div>
+                                                        <strong><?php echo htmlspecialchars($assignment['teacher_prenom'] . ' ' . $assignment['teacher_nom']); ?></strong>
+                                                    </div>
+                                                    <small class="text-muted"><?php echo htmlspecialchars($assignment['teacher_cni']); ?></small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-info">
+                                                        <?php echo htmlspecialchars($assignment['filiere_name']); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <i class="fas fa-book me-2 text-primary"></i>
+                                                    <?php echo htmlspecialchars($assignment['module_name']); ?>
+                                                </td>
+                                                <td>
+                                                    <?php echo date('d/m/Y', strtotime($assignment['assigned_date'])); ?>
+                                                </td>
+                                                <td>
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-danger" 
+                                                            onclick="confirmRemoveAssignment(<?php echo $assignment['id']; ?>, '<?php echo htmlspecialchars($assignment['teacher_prenom'] . ' ' . $assignment['teacher_nom']); ?>', '<?php echo htmlspecialchars($assignment['module_name']); ?>', '<?php echo htmlspecialchars($assignment['filiere_name']); ?>')">
+                                                        <i class="fas fa-trash me-1"></i>Remove
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Teacher Summary -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-chart-bar me-2"></i>
+                                    Teacher Assignment Summary
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <?php
+                                // Group assignments by teacher
+                                $teacher_summary = [];
+                                foreach ($assignments as $assignment) {
+                                    $teacher_key = $assignment['teacher_cni'];
+                                    if (!isset($teacher_summary[$teacher_key])) {
+                                        $teacher_summary[$teacher_key] = [
+                                            'name' => $assignment['teacher_prenom'] . ' ' . $assignment['teacher_nom'],
+                                            'cni' => $assignment['teacher_cni'],
+                                            'assignments' => []
+                                        ];
+                                    }
+                                    $teacher_summary[$teacher_key]['assignments'][] = [
+                                        'filiere' => $assignment['filiere_name'],
+                                        'module' => $assignment['module_name']
+                                    ];
+                                }
+                                ?>
+                                
+                                <?php if (empty($teacher_summary)): ?>
+                                <div class="text-center py-3">
+                                    <i class="fas fa-info-circle fa-2x text-muted mb-2"></i>
+                                    <p class="text-muted">No assignments to summarize.</p>
+                                </div>
+                                <?php else: ?>
+                                <div class="row">
+                                    <?php foreach ($teacher_summary as $teacher): ?>
+                                    <div class="col-md-6 col-lg-4 mb-3">
+                                        <div class="card h-100">
+                                            <div class="card-body">
+                                                <h6 class="card-title">
+                                                    <i class="fas fa-user me-2"></i>
+                                                    <?php echo htmlspecialchars($teacher['name']); ?>
+                                                </h6>
+                                                <p class="card-text">
+                                                    <small class="text-muted">CNI: <?php echo htmlspecialchars($teacher['cni']); ?></small>
+                                                </p>
+                                                <div class="mb-2">
+                                                    <span class="badge bg-warning">
+                                                        <?php echo count($teacher['assignments']); ?> Assignment(s)
+                                                    </span>
+                                                </div>
+                                                <div class="assignment-list">
+                                                    <?php foreach ($teacher['assignments'] as $assignment): ?>
+                                                    <div class="mb-1">
+                                                        <small>
+                                                            <i class="fas fa-book me-1"></i>
+                                                            <?php echo htmlspecialchars($assignment['module']); ?>
+                                                            <span class="text-muted">in <?php echo htmlspecialchars($assignment['filiere']); ?></span>
+                                                        </small>
+                                                    </div>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Remove Assignment Modal -->
+                <div class="modal fade" id="removeAssignmentModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title text-danger">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    Confirm Remove Assignment
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p>Are you sure you want to remove this assignment?</p>
+                                <div class="alert alert-warning">
+                                    <strong id="assignment_info"></strong>
+                                </div>
+                                <p class="text-muted">This action cannot be undone.</p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <form method="POST" action="?section=teachers&action=assign" style="display: inline;">
+                                    <input type="hidden" name="remove_assignment" value="1">
+                                    <input type="hidden" name="assignment_id" id="remove_assignment_id">
+                                    <button type="submit" class="btn btn-danger">
+                                        <i class="fas fa-trash me-2"></i>Remove Assignment
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                // Get modules data for dynamic loading
+                <?php
+                try {
+                    $stmt = $pdo->query("
+                        SELECT m.id, m.name, m.filiere_id, f.name as filiere_name
+                        FROM modules m
+                        JOIN filieres f ON m.filiere_id = f.id
+                        ORDER BY f.name, m.name
+                    ");
+                    $assignment_modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    echo "const assignmentModulesData = " . json_encode($assignment_modules) . ";";
+                } catch (PDOException $e) {
+                    echo "const assignmentModulesData = [];";
+                }
+                ?>
+
+                function updateAssignmentModules() {
+                    const filiereSelect = document.getElementById('assignment_filiere_id');
+                    const moduleSelect = document.getElementById('assignment_module_id');
+                    const selectedFiliere = filiereSelect.value;
+                    
+                    // Clear current options
+                    moduleSelect.innerHTML = '<option value="">Select Module</option>';
+                    
+                    if (selectedFiliere) {
+                        // Filter modules by selected filiere
+                        const filteredModules = assignmentModulesData.filter(module => module.filiere_id == selectedFiliere);
+                        
+                        if (filteredModules.length > 0) {
+                            filteredModules.forEach(module => {
+                                const option = document.createElement('option');
+                                option.value = module.id;
+                                option.textContent = module.name;
+                                moduleSelect.appendChild(option);
+                            });
+                            moduleSelect.disabled = false;
+                        } else {
+                            moduleSelect.innerHTML = '<option value="">No modules available</option>';
+                            moduleSelect.disabled = true;
+                        }
+                    } else {
+                        moduleSelect.innerHTML = '<option value="">Select Filière first</option>';
+                        moduleSelect.disabled = true;
+                    }
+                }
+
+                function confirmRemoveAssignment(assignmentId, teacherName, moduleName, filiereName) {
+                    document.getElementById('assignment_info').textContent = 
+                        `${teacherName} - ${moduleName} in ${filiereName}`;
+                    document.getElementById('remove_assignment_id').value = assignmentId;
+                    
+                    new bootstrap.Modal(document.getElementById('removeAssignmentModal')).show();
+                }
+                </script>
 
                 <?php endif; ?>
             </main>

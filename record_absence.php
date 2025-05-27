@@ -21,109 +21,73 @@ $db_password = '';
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $username, $db_password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    // Get teacher/admin ID
-    $recorder_id = null;
-    if ($user_role === 'teacher') {
-        $stmt = $pdo->prepare("SELECT id FROM teachers WHERE cni = ?");
-        $stmt->execute([$user_cni]);
-        $teacher = $stmt->fetch(PDO::FETCH_ASSOC);
-        $recorder_id = $teacher['id'] ?? null;
-    } elseif ($user_role === 'admin') {
-        $stmt = $pdo->prepare("SELECT id FROM admins WHERE cni = ?");
-        $stmt->execute([$user_cni]);
-        $admin = $stmt->fetch(PDO::FETCH_ASSOC);
-        $recorder_id = $admin['id'] ?? null;
-    }
-    
-    // Fetch students for dropdown
-    $stmt = $pdo->query("
-        SELECT s.id, s.nom, s.prenom, s.cni, f.name as filiere_name 
-        FROM students s 
-        LEFT JOIN filieres f ON s.filiere_id = f.id 
-        ORDER BY s.nom, s.prenom
-    ");
-    $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Fetch modules for dropdown
-    $stmt = $pdo->query("
-        SELECT m.id, m.name, f.name as filiere_name 
-        FROM modules m 
-        LEFT JOIN filieres f ON m.filiere_id = f.id 
-        ORDER BY f.name, m.name
-    ");
-    $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Fetch recent absences
-    $stmt = $pdo->query("
-        SELECT a.id, a.date, a.status,
-               CONCAT(s.prenom, ' ', s.nom) as student_name, s.cni as student_cni,
-               m.name as module_name, f.name as filiere_name,
-               CONCAT(t.prenom, ' ', t.nom) as teacher_name,
-               CONCAT(ad.prenom, ' ', ad.nom) as admin_name
-        FROM absences a
-        JOIN students s ON a.student_id = s.id
-        JOIN modules m ON a.module_id = m.id
-        JOIN filieres f ON m.filiere_id = f.id
-        LEFT JOIN teachers t ON a.recorded_by_teacher_id = t.id
-        LEFT JOIN admins ad ON a.recorded_by_admin_id = ad.id
-        ORDER BY a.date DESC
-        LIMIT 50
-    ");
-    $recent_absences = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
 } catch (PDOException $e) {
-    $error_message = 'Database connection failed.';
+    $error_message = 'Database connection failed: ' . $e->getMessage();
 }
 
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $student_id = trim($_POST['student_id'] ?? '');
-    $module_id = trim($_POST['module_id'] ?? '');
-    $status = trim($_POST['status'] ?? '');
-    $date = trim($_POST['date'] ?? '');
+// Handle attendance submission
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_attendance'])) {
+    $module_id = intval($_POST['module_id']);
+    $filiere_id = intval($_POST['filiere_id']);
     
-    if (empty($student_id) || empty($module_id) || empty($status) || empty($date)) {
-        $error_message = 'Please fill in all required fields.';
+    // Admin can select any date, teacher uses current date
+    if ($user_role === 'admin' && !empty($_POST['attendance_date'])) {
+        $date = $_POST['attendance_date'];
     } else {
-        try {
-            if ($user_role === 'teacher') {
-                $stmt = $pdo->prepare("
-                    INSERT INTO absences (student_id, module_id, date, status, recorded_by_teacher_id) 
-                    VALUES (?, ?, ?, ?, ?)
-                ");
-                $stmt->execute([$student_id, $module_id, $date, $status, $recorder_id]);
-            } else {
-                $stmt = $pdo->prepare("
-                    INSERT INTO absences (student_id, module_id, date, status, recorded_by_admin_id) 
-                    VALUES (?, ?, ?, ?, ?)
-                ");
-                $stmt->execute([$student_id, $module_id, $date, $status, $recorder_id]);
-            }
-            
-            $success_message = 'Attendance recorded successfully!';
-            
-            // Refresh recent absences
-            $stmt = $pdo->query("
-                SELECT a.id, a.date, a.status,
-                       CONCAT(s.prenom, ' ', s.nom) as student_name, s.cni as student_cni,
-                       m.name as module_name, f.name as filiere_name,
-                       CONCAT(t.prenom, ' ', t.nom) as teacher_name,
-                       CONCAT(ad.prenom, ' ', ad.nom) as admin_name
-                FROM absences a
-                JOIN students s ON a.student_id = s.id
-                JOIN modules m ON a.module_id = m.id
-                JOIN filieres f ON m.filiere_id = f.id
-                LEFT JOIN teachers t ON a.recorded_by_teacher_id = t.id
-                LEFT JOIN admins ad ON a.recorded_by_admin_id = ad.id
-                ORDER BY a.date DESC
-                LIMIT 50
-            ");
-            $recent_absences = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-        } catch (PDOException $e) {
-            $error_message = 'Error recording attendance. Please try again.';
+        $date = date('Y-m-d');
+    }
+    
+    $absent_students = $_POST['absent_students'] ?? [];
+    
+    try {
+        $pdo->beginTransaction();
+        
+        // Get all students in the filiere
+        $stmt = $pdo->prepare("SELECT cni FROM students WHERE filiere_id = ?");
+        $stmt->execute([$filiere_id]);
+        $all_students = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        if (empty($all_students)) {
+            throw new Exception("No students found in this filiere.");
         }
+        
+        // Delete existing attendance for this date/module/filiere to avoid duplicates
+        $stmt = $pdo->prepare("
+            DELETE FROM absences 
+            WHERE module_id = ? AND date = ? 
+            AND student_id IN (
+                SELECT cni FROM students WHERE filiere_id = ?
+            )
+        ");
+        $stmt->execute([$module_id, $date, $filiere_id]);
+        
+        // Insert attendance records for absent students only
+        if (!empty($absent_students)) {
+            $stmt = $pdo->prepare("
+                INSERT INTO absences (student_id, module_id, date, status, recorded_by_teacher_id, recorded_by_admin_id) 
+                VALUES (?, ?, ?, 'absent', ?, ?)
+            ");
+            
+            foreach ($absent_students as $student_cni) {
+                // Verify student belongs to this filiere
+                if (in_array($student_cni, $all_students)) {
+                    if ($user_role === 'teacher') {
+                        $stmt->execute([$student_cni, $module_id, $date, $user_cni, null]);
+                    } else {
+                        $stmt->execute([$student_cni, $module_id, $date, null, $user_cni]);
+                    }
+                }
+            }
+        }
+        
+        $pdo->commit();
+        $absent_count = count($absent_students);
+        $present_count = count($all_students) - $absent_count;
+        $success_message = "Attendance recorded successfully! Present: $present_count, Absent: $absent_count";
+        
+    } catch (Exception $e) {
+        $pdo->rollback();
+        $error_message = 'Error recording attendance: ' . $e->getMessage();
     }
 }
 
@@ -151,13 +115,12 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
 </head>
 <body class="dashboard-page">
     <!-- Top Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top border-bottom shadow-sm <?php echo $navbar_color; ?> ">
+    <nav class="navbar navbar-expand-lg navbar-dark <?php echo $navbar_color; ?> fixed-top">
         <div class="container-fluid">
             <!-- Brand -->
             <a class="navbar-brand d-flex align-items-center" href="<?php echo $dashboard_link; ?>">
-                <!-- <i class="fas fa-graduation-cap me-2"></i> -->
-                <!-- <span class="fw-bold">Groupe IKI</span> -->
-                <img src="assets/logo-circle.jpg" alt="" width="120px">
+                <i class="fas fa-graduation-cap me-2"></i>
+                <span class="fw-bold">Groupe IKI</span>
             </a>
 
             <!-- Mobile Toggle -->
@@ -246,10 +209,21 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                     <h1 class="h2">
                         <i class="fas fa-calendar-check me-2"></i>
                         Record Attendance
+                        <?php if ($user_role === 'teacher'): ?>
+                        - <?php echo date('d/m/Y'); ?>
+                        <?php else: ?>
+                        - Admin Access
+                        <?php endif; ?>
                     </h1>
-                    <button class="btn btn-outline-primary d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar">
-                        <i class="fas fa-bars"></i>
-                    </button>
+                    <div class="text-muted">
+                        <?php if ($user_role === 'teacher'): ?>
+                        <i class="fas fa-clock me-2"></i>
+                        Current Time: <?php echo date('H:i'); ?>
+                        <?php else: ?>
+                        <i class="fas fa-crown me-2"></i>
+                        Admin Privileges
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <!-- Success/Error Messages -->
@@ -269,326 +243,615 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                 </div>
                 <?php endif; ?>
 
-                <div class="row">
-    <?php if (!isset($_GET['filiere_id'])): ?>
-    <!-- Filière Selection -->
+                <?php if ($user_role === 'teacher'): ?>
+<!-- Teacher's Assigned Classes -->
+<div class="row">
+    <?php
+    // Get teacher's assigned modules and filieres
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT 
+            tma.module_id, 
+            tma.filiere_id,
+            m.name as module_name,
+            f.name as filiere_name,
+            f.description as filiere_description,
+            COUNT(s.cni) as student_count
+        FROM teacher_module_assignments tma
+        JOIN modules m ON tma.module_id = m.id
+        JOIN filieres f ON tma.filiere_id = f.id
+        LEFT JOIN students s ON s.filiere_id = f.id
+        WHERE tma.teacher_cni = ? AND tma.is_active = TRUE
+        GROUP BY tma.module_id, tma.filiere_id
+        ORDER BY f.name, m.name
+    ");
+    $stmt->execute([$user_cni]);
+    $assignments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    if (empty($assignments)): ?>
+    <div class="col-12">
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>No assignments found!</strong> You are not assigned to any modules yet. Please contact the administrator.
+        </div>
+    </div>
+    <?php else: ?>
+    
+    <?php if (!isset($_GET['module_id']) || !isset($_GET['filiere_id'])): ?>
+    <!-- Show available assignments -->
     <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-calendar-check me-2"></i>
-                    Select Filière to Record Attendance
+                    <i class="fas fa-chalkboard me-2"></i>
+                    Select Your Assigned Module to Record Attendance
                 </h5>
             </div>
             <div class="card-body">
                 <div class="row">
-                    <?php
-                    // Fetch filières with student count
-                    $stmt = $pdo->query("
-                        SELECT f.id, f.name, f.description, COUNT(s.id) as student_count
-                        FROM filieres f
-                        LEFT JOIN students s ON f.id = s.filiere_id
-                        GROUP BY f.id, f.name, f.description
-                        ORDER BY f.name
-                    ");
-                    $filieres = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                    
-                    foreach ($filieres as $filiere):
-                    ?>
+                    <?php foreach ($assignments as $assignment): ?>
                     <div class="col-md-6 col-lg-4 mb-3">
-                        <div class="card h-100 filiere-card" style="cursor: pointer;" onclick="selectFiliere(<?php echo $filiere['id']; ?>)">
+                        <div class="card h-100 module-card" style="cursor: pointer;" 
+                             onclick="selectModule(<?php echo $assignment['module_id']; ?>, <?php echo $assignment['filiere_id']; ?>)">
                             <div class="card-body text-center">
                                 <div class="mb-3">
-                                    <i class="fas fa-users fa-3x text-success"></i>
+                                    <i class="fas fa-book fa-3x text-success"></i>
                                 </div>
-                                <h5 class="card-title"><?php echo htmlspecialchars($filiere['name']); ?></h5>
-                                <p class="card-text text-muted"><?php echo htmlspecialchars($filiere['description']); ?></p>
-                                <div class="mt-3">
-                                    <span class="badge bg-info fs-6">
-                                        <i class="fas fa-user-graduate me-1"></i>
-                                        <?php echo $filiere['student_count']; ?> Students
-                                    </span>
-                                </div>
+                                <h6 class="card-title"><?php echo htmlspecialchars($assignment['module_name']); ?></h6>
+                                <p class="card-text">
+                                    <strong><?php echo htmlspecialchars($assignment['filiere_name']); ?></strong><br>
+                                    <small class="text-muted"><?php echo htmlspecialchars($assignment['filiere_description']); ?></small>
+                                </p>
+                                <span class="badge bg-success">
+                                    <i class="fas fa-users me-1"></i>
+                                    <?php echo $assignment['student_count']; ?> Students
+                                </span>
                             </div>
                         </div>
                     </div>
                     <?php endforeach; ?>
                 </div>
-                
-                <?php if (empty($filieres)): ?>
-                <div class="text-center py-5">
-                    <i class="fas fa-calendar-check fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">No Filières Found</h5>
-                    <p class="text-muted">Please add filières first to record attendance.</p>
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
-    
-    <?php else: 
-    // Get selected filière info
-    $filiere_id = intval($_GET['filiere_id']);
-    $stmt = $pdo->prepare("SELECT name FROM filieres WHERE id = ?");
-    $stmt->execute([$filiere_id]);
-    $selected_filiere = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$selected_filiere) {
-        echo '<div class="alert alert-danger">Invalid filière selected.</div>';
-        exit;
-    }
-    
-    // Get students from selected filière
-    $stmt = $pdo->prepare("
-    SELECT s.id, s.nom, s.prenom, s.cni
-    FROM students s 
-    WHERE s.filiere_id = ?
-    ORDER BY s.nom, s.prenom
-");
-    $stmt->execute([$filiere_id]);
-    $filiere_students = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Get modules from selected filière
-    $stmt = $pdo->prepare("
-        SELECT m.id, m.name
-        FROM modules m 
-        WHERE m.filiere_id = ?
-        ORDER BY m.name
-    ");
-    $stmt->execute([$filiere_id]);
-    $filiere_modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Get recent attendance for this filière
-    $stmt = $pdo->prepare("
-        SELECT a.id, a.date, a.status,
-               CONCAT(s.prenom, ' ', s.nom) as student_name, s.cni as student_cni,
-               m.name as module_name,
-               CONCAT(t.prenom, ' ', t.nom) as teacher_name,
-               CONCAT(ad.prenom, ' ', ad.nom) as admin_name
-        FROM absences a
-        JOIN students s ON a.student_id = s.id
-        JOIN modules m ON a.module_id = m.id
-        LEFT JOIN teachers t ON a.recorded_by_teacher_id = t.id
-        LEFT JOIN admins ad ON a.recorded_by_admin_id = ad.id
-        WHERE s.filiere_id = ?
-        ORDER BY a.date DESC
-        LIMIT 30
-    ");
-    $stmt->execute([$filiere_id]);
-    $filiere_absences = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    ?>
-    
-    <!-- Breadcrumb -->
-    <div class="col-12 mb-3">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item">
-                    <a href="record_absence.php" class="text-decoration-none">
-                        <i class="fas fa-calendar-check me-1"></i>Record Attendance
-                    </a>
-                </li>
-                <li class="breadcrumb-item active" aria-current="page">
-                    <i class="fas fa-users me-1"></i>
-                    <?php echo htmlspecialchars($selected_filiere['name']); ?>
-                </li>
-            </ol>
-        </nav>
-    </div>
-    
-    <!-- Record Attendance Form -->
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-plus me-2"></i>
-                    Record Attendance - <?php echo htmlspecialchars($selected_filiere['name']); ?>
-                </h5>
-            </div>
-            <div class="card-body">
-                <form method="POST" action="record_absence.php?filiere_id=<?php echo $filiere_id; ?>" id="attendanceForm" novalidate>
-                    <div class="mb-3">
-                        <label for="student_id" class="form-label">
-                            <i class="fas fa-user-graduate me-2"></i>Student *
-                        </label>
-                        <select class="form-select" id="student_id" name="student_id" required>
-                            <option value="">Select Student</option>
-                            <?php foreach ($filiere_students as $student): ?>
-                            <option value="<?php echo $student['id']; ?>">
-                                <?php echo htmlspecialchars($student['prenom'] . ' ' . $student['nom'] . ' (' . $student['cni'] . ')'); ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <div class="invalid-feedback">
-                            Please select a student.
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="module_id" class="form-label">
-                            <i class="fas fa-book me-2"></i>Module *
-                        </label>
-                        <select class="form-select" id="module_id" name="module_id" required>
-                            <option value="">Select Module</option>
-                            <?php foreach ($filiere_modules as $module): ?>
-                            <option value="<?php echo $module['id']; ?>">
-                                <?php echo htmlspecialchars($module['name']); ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <div class="invalid-feedback">
-                            Please select a module.
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="status" class="form-label">
-                            <i class="fas fa-check-circle me-2"></i>Status *
-                        </label>
-                        <select class="form-select" id="status" name="status" required>
-                            <option value="">Select Status</option>
-                            <option value="present">Present</option>
-                            <option value="absent">Absent</option>
-                        </select>
-                        <div class="invalid-feedback">
-                            Please select attendance status.
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="date" class="form-label">
-                            <i class="fas fa-calendar me-2"></i>Date *
-                        </label>
-                        <input type="date" 
-                               class="form-control" 
-                               id="date" 
-                               name="date" 
-                               value="<?php echo date('Y-m-d'); ?>"
-                               required>
-                        <div class="invalid-feedback">
-                            Please select a date.
-                        </div>
-                    </div>
-
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-success" id="submitBtn">
-                            <span class="btn-text">
-                                <i class="fas fa-save me-2"></i>Record Attendance
-                            </span>
-                            <span class="btn-loading d-none">
-                                <span class="spinner-border spinner-border-sm me-2"></span>
-                                Recording...
-                            </span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Recent Attendance for this Filière -->
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-list me-2"></i>
-                    Recent Attendance - <?php echo htmlspecialchars($selected_filiere['name']); ?>
-                </h5>
-                <span class="badge bg-success">
-                    <?php echo count($filiere_absences); ?> Records
-                </span>
-            </div>
-            <div class="card-body">
-                <?php if (empty($filiere_absences)): ?>
-                <div class="text-center py-5">
-                    <i class="fas fa-calendar-check fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">No attendance records yet</h5>
-                    <p class="text-muted">Start by recording attendance for students in this filière.</p>
-                </div>
-                <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead class="table-success">
-                            <tr>
-                                <th>Student</th>
-                                <th>Module</th>
-                                <th>Status</th>
-                                <th>Date</th>
-                                <th>Recorded By</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($filiere_absences as $absence): ?>
-                            <tr>
-                                <td>
-                                    <div>
-                                        <strong><?php echo htmlspecialchars($absence['student_name']); ?></strong>
-                                        <br>
-                                        <small class="text-muted"><?php echo htmlspecialchars($absence['student_cni']); ?></small>
-                                    </div>
-                                </td>
-                                <td>
-                                    <i class="fas fa-book me-2 text-primary"></i>
-                                    <?php echo htmlspecialchars($absence['module_name']); ?>
-                                </td>
-                                <td>
-                                    <?php if ($absence['status'] === 'present'): ?>
-                                        <span class="badge bg-success">
-                                            <i class="fas fa-check me-1"></i>Present
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="badge bg-danger">
-                                            <i class="fas fa-times me-1"></i>Absent
-                                        </span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <i class="fas fa-calendar me-2 text-muted"></i>
-                                    <?php echo date('d/m/Y', strtotime($absence['date'])); ?>
-                                </td>
-                                <td>
-                                    <?php if ($absence['teacher_name']): ?>
-                                        <i class="fas fa-chalkboard-teacher me-2 text-success"></i>
-                                        <?php echo htmlspecialchars($absence['teacher_name']); ?>
-                                    <?php elseif ($absence['admin_name']): ?>
-                                        <i class="fas fa-user-shield me-2 text-primary"></i>
-                                        <?php echo htmlspecialchars($absence['admin_name']); ?>
-                                    <?php else: ?>
-                                        <span class="text-muted">N/A</span>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-                <?php endif; ?>
             </div>
         </div>
     </div>
     <?php endif; ?>
+    
+    <?php endif; ?>
 </div>
+<?php endif; ?>
 
-<script>
-function selectFiliere(filiereId) {
-    window.location.href = 'record_absence.php?filiere_id=' + filiereId;
-}
-</script>
+                <?php if ($user_role === 'admin' && (!isset($_GET['module_id']) || !isset($_GET['filiere_id']))): ?>
+                <!-- Show available modules and filieres -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-chalkboard me-2"></i>
+                                    Select Module and Filière to Record Attendance
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <?php
+                                // Get all modules and filieres
+                                try {
+                                    $stmt = $pdo->query("
+                                        SELECT 
+                                            m.id as module_id, 
+                                            m.name as module_name,
+                                            f.id as filiere_id,
+                                            f.name as filiere_name,
+                                            f.description as filiere_description,
+                                            COUNT(s.cni) as student_count
+                                        FROM modules m
+                                        JOIN filieres f ON m.filiere_id = f.id
+                                        LEFT JOIN students s ON s.filiere_id = f.id
+                                        GROUP BY m.id, f.id
+                                        ORDER BY f.name, m.name
+                                    ");
+                                    $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                                    
+                                    if (empty($modules)): ?>
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                        <strong>No modules found!</strong> Please contact the administrator to set up modules and filieres.
+                                    </div>
+                                    <?php else: ?>
+                                    <div class="row">
+                                        <?php foreach ($modules as $module): ?>
+                                        <div class="col-md-6 col-lg-4 mb-3">
+                                            <div class="card h-100 module-card" style="cursor: pointer;" 
+                                                 onclick="selectModule(<?php echo $module['module_id']; ?>, <?php echo $module['filiere_id']; ?>)">
+                                                <div class="card-body text-center">
+                                                    <div class="mb-3">
+                                                        <i class="fas fa-book fa-3x text-primary"></i>
+                                                    </div>
+                                                    <h6 class="card-title"><?php echo htmlspecialchars($module['module_name']); ?></h6>
+                                                    <p class="card-text">
+                                                        <strong><?php echo htmlspecialchars($module['filiere_name']); ?></strong><br>
+                                                        <small class="text-muted"><?php echo htmlspecialchars($module['filiere_description']); ?></small>
+                                                    </p>
+                                                    <span class="badge bg-info">
+                                                        <i class="fas fa-users me-1"></i>
+                                                        <?php echo $module['student_count']; ?> Students
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <?php endif; ?>
+                                <?php } catch (PDOException $e) { ?>
+                                <div class="alert alert-danger">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    Error loading modules: <?php echo htmlspecialchars($e->getMessage()); ?>
+                                </div>
+                                <?php } ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <?php endif; ?>
 
-<style>
-.filiere-card {
-    transition: all 0.3s ease;
-    border: 2px solid transparent;
-}
+                <?php if (isset($_GET['module_id']) && isset($_GET['filiere_id'])): 
+                // Show attendance form for selected module/filiere
+                $module_id = intval($_GET['module_id']);
+                $filiere_id = intval($_GET['filiere_id']);
+                
+                try {
 
-.filiere-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    border-color: var(--bs-success);
-}
-</style>
+                    if ($user_role === 'teacher'){
+                        // Verify teacher has access to this module/filiere
+                        $stmt = $pdo->prepare("
+                            SELECT m.name as module_name, f.name as filiere_name, f.description as filiere_description
+                            FROM teacher_module_assignments tma
+                            JOIN modules m ON tma.module_id = m.id
+                            JOIN filieres f ON tma.filiere_id = f.id
+                            WHERE tma.teacher_cni = ? AND tma.module_id = ? AND tma.filiere_id = ? AND tma.is_active = TRUE
+                        ");
+                        $stmt->execute([$user_cni, $module_id, $filiere_id]);
+                        $info = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                        if (!$info): ?>
+                        <div class="col-12">
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                You don't have permission to record attendance for this module in this filière.
+                            </div>
+                        </div>
+                        <?php else:
+                    
+                        // Get students in this filiere
+                        $stmt = $pdo->prepare("
+                            SELECT cni, nom, prenom
+                            FROM students 
+                            WHERE filiere_id = ?
+                            ORDER BY nom, prenom
+                        ");
+                        $stmt->execute([$filiere_id]);
+                        $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                        
+                        // Get selected date for checking existing attendance
+                        $selected_date = $_GET['date'] ?? date('Y-m-d');
+                        
+                        // Check if attendance already recorded for selected date
+                        $stmt = $pdo->prepare("
+                            SELECT COUNT(*) as count
+                            FROM absences a
+                            JOIN students s ON a.student_id = s.cni
+                            WHERE a.module_id = ? AND s.filiere_id = ? AND a.date = ?
+                        ");
+                        $stmt->execute([$module_id, $filiere_id, $selected_date]);
+                        $attendance_exists = $stmt->fetch(PDO::FETCH_ASSOC)['count'] > 0;
+                        ?>
+                        
+                        <!-- Breadcrumb -->
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <nav aria-label="breadcrumb">
+                                    <ol class="breadcrumb">
+                                        <li class="breadcrumb-item">
+                                            <a href="record_absence.php" class="text-decoration-none">
+                                                <i class="fas fa-calendar-check me-1"></i>Record Attendance
+                                            </a>
+                                        </li>
+                                        <li class="breadcrumb-item active" aria-current="page">
+                                            <?php echo htmlspecialchars($info['filiere_name'] . ' - ' . $info['module_name']); ?>
+                                        </li>
+                                    </ol>
+                                </nav>
+                            </div>
+                        </div>
+                        
+                        <!-- Date Selection for Admin -->
+                        
+                        
+                        <!-- Attendance Form -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h5 class="card-title mb-0">
+                                                <i class="fas fa-list-check me-2"></i>
+                                                Attendance - <?php echo htmlspecialchars($info['filiere_name']); ?>
+                                            </h5>
+                                            <small class="text-muted">
+                                                Module: <?php echo htmlspecialchars($info['module_name']); ?> |
+                                                Date: <?php echo date('d/m/Y', strtotime($selected_date)); ?>
+                                            </small>
+                                        </div>
+                                        <span class="badge bg-info fs-6">
+                                            <?php echo count($students); ?> Students
+                                        </span>
+                                    </div>
+                                    <div class="card-body">
+                                        <?php if ($attendance_exists): ?>
+                                        <div class="alert alert-warning">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                                            <strong>Attendance already recorded for this date!</strong> Submitting again will update the existing records.
+                                        </div>
+                                        <?php endif; ?>
+                                        
+                                        <?php if (empty($students)): ?>
+                                        <div class="text-center py-5">
+                                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                                            <h5 class="text-muted">No students found in this filiere</h5>
+                                            <p class="text-muted">Please contact the administrator to add students to this filiere.</p>
+                                        </div>
+                                        <?php else: ?>
+                                        
+                                        <form method="POST" action="" id="attendanceForm">
+                                            <input type="hidden" name="module_id" value="<?php echo $module_id; ?>">
+                                            <input type="hidden" name="filiere_id" value="<?php echo $filiere_id; ?>">
+                                            
+                                            
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                                    <div>
+                                                        <strong>Instructions:</strong> All students are marked as <span class="text-success">Present</span> by default. 
+                                                        Check the box next to students who are <span class="text-danger">Absent</span>.
+                                                    </div>
+                                                    <div>
+                                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll()">
+                                                            <i class="fas fa-check-square me-1"></i>
+                                                            Toggle All
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="table-responsive">
+                                                    <table class="table table-hover">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th width="50">
+                                                                    <input type="checkbox" id="selectAll" onchange="toggleAllCheckboxes()">
+                                                                </th>
+                                                                <th>Student Name</th>
+                                                                <th>CNI</th>
+                                                                <th>Status</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <?php foreach ($students as $student): ?>
+                                                            <tr>
+                                                                <td>
+                                                                    <input type="checkbox" 
+                                                                           name="absent_students[]" 
+                                                                           value="<?php echo htmlspecialchars($student['cni']); ?>"
+                                                                           class="student-checkbox"
+                                                                           onchange="updateStatus(this)">
+                                                                </td>
+                                                                <td>
+                                                                    <strong><?php echo htmlspecialchars($student['prenom'] . ' ' . $student['nom']); ?></strong>
+                                                                </td>
+                                                                <td>
+                                                                    <code><?php echo htmlspecialchars($student['cni']); ?></code>
+                                                                </td>
+                                                                <td>
+                                                                    <span class="status-badge badge bg-success">
+                                                                        <i class="fas fa-check me-1"></i>Present
+                                                                    </span>
+                                                                </td>
+                                                            </tr>
+                                                            <?php endforeach; ?>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="d-flex justify-content-between">
+                                                <a href="record_absence.php" class="btn btn-secondary">
+                                                    <i class="fas fa-arrow-left me-2"></i>Back to Modules
+                                                </a>
+                                                <button type="submit" name="submit_attendance" class="btn btn-<?php echo $user_role === 'admin' ? 'warning' : 'success'; ?> btn-lg">
+                                                    <i class="fas fa-<?php echo $user_role === 'admin' ? 'crown' : 'save'; ?> me-2"></i>
+                                                    Submit Attendance (<?php echo count($students); ?> students)
+                                                </button>
+                                            </div>
+                                        </form>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif;
+                    } else {
+                        // Get module and filiere info
+                        $stmt = $pdo->prepare("
+                            SELECT m.name as module_name, f.name as filiere_name, f.description as filiere_description
+                            FROM modules m
+                            JOIN filieres f ON m.filiere_id = f.id
+                            WHERE m.id = ? AND f.id = ?
+                        ");
+                        $stmt->execute([$module_id, $filiere_id]);
+                        $info = $stmt->fetch(PDO::FETCH_ASSOC);
+                        
+                        if (!$info): ?>
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Invalid module or filiere selection.
+                        </div>
+                        <?php else:
+                        
+                        // Get students in this filiere
+                        $stmt = $pdo->prepare("
+                            SELECT cni, nom, prenom
+                            FROM students 
+                            WHERE filiere_id = ?
+                            ORDER BY nom, prenom
+                        ");
+                        $stmt->execute([$filiere_id]);
+                        $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                        
+                        // Get selected date for checking existing attendance
+                        $selected_date = $_GET['date'] ?? date('Y-m-d');
+                        
+                        // Check if attendance already recorded for selected date
+                        $stmt = $pdo->prepare("
+                            SELECT COUNT(*) as count
+                            FROM absences a
+                            JOIN students s ON a.student_id = s.cni
+                            WHERE a.module_id = ? AND s.filiere_id = ? AND a.date = ?
+                        ");
+                        $stmt->execute([$module_id, $filiere_id, $selected_date]);
+                        $attendance_exists = $stmt->fetch(PDO::FETCH_ASSOC)['count'] > 0;
+                        ?>
+                        
+                        <!-- Breadcrumb -->
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <nav aria-label="breadcrumb">
+                                    <ol class="breadcrumb">
+                                        <li class="breadcrumb-item">
+                                            <a href="record_absence.php" class="text-decoration-none">
+                                                <i class="fas fa-calendar-check me-1"></i>Record Attendance
+                                            </a>
+                                        </li>
+                                        <li class="breadcrumb-item active" aria-current="page">
+                                            <?php echo htmlspecialchars($info['filiere_name'] . ' - ' . $info['module_name']); ?>
+                                        </li>
+                                    </ol>
+                                </nav>
+                            </div>
+                        </div>
+                        
+                        <!-- Date Selection for Admin -->
+                        <?php if ($user_role === 'admin'): ?>
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <form method="GET" action="" class="row g-3 align-items-end">
+                                            <input type="hidden" name="module_id" value="<?php echo $module_id; ?>">
+                                            <input type="hidden" name="filiere_id" value="<?php echo $filiere_id; ?>">
+                                            <div class="col-md-4">
+                                                <label for="date" class="form-label">
+                                                    <i class="fas fa-calendar me-2"></i>Select Date
+                                                </label>
+                                                <input type="date" 
+                                                       class="form-control" 
+                                                       id="date" 
+                                                       name="date" 
+                                                       value="<?php echo htmlspecialchars($selected_date); ?>"
+                                                       max="<?php echo date('Y-m-d'); ?>">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <button type="submit" class="btn btn-primary">
+                                                    <i class="fas fa-search me-2"></i>Load Date
+                                                </button>
+                                            </div>
+                                            <div class="col-md-4 text-end">
+                                                <span class="badge bg-info fs-6">
+                                                    Recording for: <?php echo date('d/m/Y', strtotime($selected_date)); ?>
+                                                </span>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <!-- Attendance Form -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h5 class="card-title mb-0">
+                                                <i class="fas fa-list-check me-2"></i>
+                                                Attendance - <?php echo htmlspecialchars($info['filiere_name']); ?>
+                                            </h5>
+                                            <small class="text-muted">
+                                                Module: <?php echo htmlspecialchars($info['module_name']); ?> |
+                                                Date: <?php echo date('d/m/Y', strtotime($selected_date)); ?>
+                                            </small>
+                                        </div>
+                                        <span class="badge bg-info fs-6">
+                                            <?php echo count($students); ?> Students
+                                        </span>
+                                    </div>
+                                    <div class="card-body">
+                                        <?php if ($attendance_exists): ?>
+                                        <div class="alert alert-warning">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                                            <strong>Attendance already recorded for this date!</strong> Submitting again will update the existing records.
+                                        </div>
+                                        <?php endif; ?>
+                                        
+                                        <?php if (empty($students)): ?>
+                                        <div class="text-center py-5">
+                                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                                            <h5 class="text-muted">No students found in this filiere</h5>
+                                            <p class="text-muted">Please contact the administrator to add students to this filiere.</p>
+                                        </div>
+                                        <?php else: ?>
+                                        
+                                        <form method="POST" action="" id="attendanceForm">
+                                            <input type="hidden" name="module_id" value="<?php echo $module_id; ?>">
+                                            <input type="hidden" name="filiere_id" value="<?php echo $filiere_id; ?>">
+                                            <?php if ($user_role === 'admin'): ?>
+                                            <input type="hidden" name="attendance_date" value="<?php echo htmlspecialchars($selected_date); ?>">
+                                            <?php endif; ?>
+                                            
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                                    <div>
+                                                        <strong>Instructions:</strong> All students are marked as <span class="text-success">Present</span> by default. 
+                                                        Check the box next to students who are <span class="text-danger">Absent</span>.
+                                                    </div>
+                                                    <div>
+                                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll()">
+                                                            <i class="fas fa-check-square me-1"></i>
+                                                            Toggle All
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="table-responsive">
+                                                    <table class="table table-hover">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th width="50">
+                                                                    <input type="checkbox" id="selectAll" onchange="toggleAllCheckboxes()">
+                                                                </th>
+                                                                <th>Student Name</th>
+                                                                <th>CNI</th>
+                                                                <th>Status</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <?php foreach ($students as $student): ?>
+                                                            <tr>
+                                                                <td>
+                                                                    <input type="checkbox" 
+                                                                           name="absent_students[]" 
+                                                                           value="<?php echo htmlspecialchars($student['cni']); ?>"
+                                                                           class="student-checkbox"
+                                                                           onchange="updateStatus(this)">
+                                                                </td>
+                                                                <td>
+                                                                    <strong><?php echo htmlspecialchars($student['prenom'] . ' ' . $student['nom']); ?></strong>
+                                                                </td>
+                                                                <td>
+                                                                    <code><?php echo htmlspecialchars($student['cni']); ?></code>
+                                                                </td>
+                                                                <td>
+                                                                    <span class="status-badge badge bg-success">
+                                                                        <i class="fas fa-check me-1"></i>Present
+                                                                    </span>
+                                                                </td>
+                                                            </tr>
+                                                            <?php endforeach; ?>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="d-flex justify-content-between">
+                                                <a href="record_absence.php" class="btn btn-secondary">
+                                                    <i class="fas fa-arrow-left me-2"></i>Back to Modules
+                                                </a>
+                                                <button type="submit" name="submit_attendance" class="btn btn-<?php echo $user_role === 'admin' ? 'warning' : 'success'; ?> btn-lg">
+                                                    <i class="fas fa-<?php echo $user_role === 'admin' ? 'crown' : 'save'; ?> me-2"></i>
+                                                    Submit Attendance (<?php echo count($students); ?> students)
+                                                </button>
+                                            </div>
+                                        </form>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    <?php } ?>
+                <?php } catch (PDOException $e) { ?>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Database error: <?php echo htmlspecialchars($e->getMessage()); ?>
+                </div>
+                <?php } ?>
+                <?php endif; ?>
             </main>
         </div>
     </div>
+
+    <script>
+    function selectModule(moduleId, filiereId) {
+        window.location.href = 'record_absence.php?module_id=' + moduleId + '&filiere_id=' + filiereId;
+    }
+    
+    function toggleAllCheckboxes() {
+        const selectAll = document.getElementById('selectAll');
+        const checkboxes = document.querySelectorAll('.student-checkbox');
+        
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = selectAll.checked;
+            updateStatus(checkbox);
+        });
+    }
+    
+    function updateStatus(checkbox) {
+        const row = checkbox.closest('tr');
+        const statusBadge = row.querySelector('.status-badge');
+        
+        if (checkbox.checked) {
+            statusBadge.className = 'status-badge badge bg-danger';
+            statusBadge.innerHTML = '<i class="fas fa-times me-1"></i>Absent';
+        } else {
+            statusBadge.className = 'status-badge badge bg-success';
+            statusBadge.innerHTML = '<i class="fas fa-check me-1"></i>Present';
+        }
+    }
+    
+    function toggleAll() {
+        const selectAll = document.getElementById('selectAll');
+        selectAll.checked = !selectAll.checked;
+        toggleAllCheckboxes();
+    }
+    </script>
+
+    <style>
+    .module-card {
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+
+    .module-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        border-color: var(--bs-primary);
+    }
+    
+    .table tbody tr:hover {
+        background-color: rgba(0,0,0,0.02);
+    }
+    
+    .student-checkbox {
+        transform: scale(1.2);
+    }
+    </style>
 
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
