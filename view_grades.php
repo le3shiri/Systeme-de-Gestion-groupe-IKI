@@ -250,7 +250,7 @@ if ($user_role === 'admin') {
                                         <th>Filière</th>
                                         <th>Grade</th>
                                         <th>Date</th>
-                                        <th>Recorded By</th>
+                                        <!-- <th>Recorded By</th> -->
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -285,14 +285,14 @@ if ($user_role === 'admin') {
                                             <i class="fas fa-calendar me-2 text-muted"></i>
                                             <?php echo date('d/m/Y', strtotime($grade['date'])); ?>
                                         </td>
-                                        <td>
+                                        <!-- <td>
                                             <?php if ($grade['teacher_name']): ?>
                                                 <i class="fas fa-chalkboard-teacher me-2 text-success"></i>
                                                 <?php echo htmlspecialchars($grade['teacher_name']); ?>
                                             <?php else: ?>
                                                 <span class="text-muted">N/A</span>
                                             <?php endif; ?>
-                                        </td>
+                                        </td> -->
                                     </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -312,7 +312,7 @@ if ($user_role === 'admin') {
                             $passedGrades = count(array_filter($grades, function($g) { return floatval($g['grade']) >= 10; }));
                             $passRate = $totalGrades > 0 ? ($passedGrades / $totalGrades) * 100 : 0;
                             ?>
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="card bg-primary text-white">
                                     <div class="card-body text-center">
                                         <h5><?php echo $totalGrades; ?></h5>
@@ -320,15 +320,16 @@ if ($user_role === 'admin') {
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <!-- <div class="col-md-3">
                                 <div class="card bg-info text-white">
-                                    <div class="card-body text-center">
-                                        <h5><?php echo number_format($averageGrade, 2); ?></h5>
-                                        <small>Average Grade</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
+                                     <div class="card-body text-center">
+                                         <h5> -->
+                                        <!-- </h5> -->
+                                        <!-- <small>Average Grade</small> -->
+                                    <!-- </div>  -->
+                                <!-- </div> -->
+                            <!-- </div>  -->
+                            <div class="col-md-4">
                                 <div class="card bg-success text-white">
                                     <div class="card-body text-center">
                                         <h5><?php echo $passedGrades; ?></h5>
@@ -336,7 +337,7 @@ if ($user_role === 'admin') {
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="card bg-warning text-white">
                                     <div class="card-body text-center">
                                         <h5><?php echo number_format($passRate, 1); ?>%</h5>
