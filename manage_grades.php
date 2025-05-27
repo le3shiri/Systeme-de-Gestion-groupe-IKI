@@ -538,7 +538,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                 <th>Module</th>
                                 <th>Grade</th>
                                 <th>Date</th>
-                                <th>Recorded By</th>
+                                <!-- <th>Recorded By</th> -->
                             </tr>
                         </thead>
                         <tbody>
@@ -570,14 +570,6 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                 <td>
                                     <i class="fas fa-calendar me-2 text-muted"></i>
                                     <?php echo date('d/m/Y', strtotime($grade['date'])); ?>
-                                </td>
-                                <td>
-                                    <?php if ($grade['teacher_name']): ?>
-                                        <i class="fas fa-chalkboard-teacher me-2 text-success"></i>
-                                        <?php echo htmlspecialchars($grade['teacher_name']); ?>
-                                    <?php else: ?>
-                                        <span class="text-muted">N/A</span>
-                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <?php endforeach; ?>

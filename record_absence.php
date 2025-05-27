@@ -42,13 +42,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_attendance'])) 
     try {
         $pdo->beginTransaction();
         
-        // Get all students in the filiere
-        $stmt = $pdo->prepare("SELECT cni FROM students WHERE filiere_id = ?");
+        // Get all students in the filiere with their id and cni
+        $stmt = $pdo->prepare("SELECT id, cni FROM students WHERE filiere_id = ?");
         $stmt->execute([$filiere_id]);
-        $all_students = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $all_students = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         if (empty($all_students)) {
             throw new Exception("No students found in this filiere.");
+        }
+        
+        // Create a mapping from cni to id
+        $cni_to_id_map = [];
+        foreach ($all_students as $student) {
+            $cni_to_id_map[$student['cni']] = $student['id'];
         }
         
         // Delete existing attendance for this date/module/filiere to avoid duplicates
@@ -56,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_attendance'])) 
             DELETE FROM absences 
             WHERE module_id = ? AND date = ? 
             AND student_id IN (
-                SELECT cni FROM students WHERE filiere_id = ?
+                SELECT id FROM students WHERE filiere_id = ?
             )
         ");
         $stmt->execute([$module_id, $date, $filiere_id]);
@@ -69,12 +75,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_attendance'])) 
             ");
             
             foreach ($absent_students as $student_cni) {
-                // Verify student belongs to this filiere
-                if (in_array($student_cni, $all_students)) {
+                // Verify student belongs to this filiere and get their ID
+                if (isset($cni_to_id_map[$student_cni])) {
+                    $student_id = $cni_to_id_map[$student_cni];
                     if ($user_role === 'teacher') {
-                        $stmt->execute([$student_cni, $module_id, $date, $user_cni, null]);
+                        $stmt->execute([$student_id, $module_id, $date, $user_cni, null]);
                     } else {
-                        $stmt->execute([$student_cni, $module_id, $date, null, $user_cni]);
+                        // Get admin ID from CNI
+                        $admin_stmt = $pdo->prepare("SELECT id FROM admins WHERE cni = ?");
+                        $admin_stmt->execute([$user_cni]);
+                        $admin_id = $admin_stmt->fetchColumn();
+                        
+                        if ($admin_id) {
+                            $stmt->execute([$student_id, $module_id, $date, null, $admin_id]);
+                        } else {
+                            throw new Exception("Admin ID not found for CNI: $user_cni");
+                        }
                     }
                 }
             }
@@ -83,12 +99,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_attendance'])) 
         $pdo->commit();
         $absent_count = count($absent_students);
         $present_count = count($all_students) - $absent_count;
-        $success_message = "Attendance recorded successfully! Present: $present_count, Absent: $absent_count";
+        
+        // Store success message in session instead of variable
+        $_SESSION['success_message'] = "Attendance recorded successfully! Present: $present_count, Absent: $absent_count";
+        
+        // Redirect to the same page but with GET method
+        $redirect_url = "record_absence.php?module_id=$module_id&filiere_id=$filiere_id";
+        if ($user_role === 'admin' && !empty($_POST['attendance_date'])) {
+            $redirect_url .= "&date=" . urlencode($_POST['attendance_date']);
+        }
+        header("Location: $redirect_url");
+        exit();
         
     } catch (Exception $e) {
         $pdo->rollback();
         $error_message = 'Error recording attendance: ' . $e->getMessage();
     }
+}
+
+// Check for session messages
+if (isset($_SESSION['success_message'])) {
+    $success_message = $_SESSION['success_message'];
+    unset($_SESSION['success_message']); // Clear the message after displaying it once
 }
 
 // Determine navbar color based on role
@@ -392,7 +424,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                 </div>
                 
                 <?php endif; ?>
-
+                
                 <?php if (isset($_GET['module_id']) && isset($_GET['filiere_id'])): 
                 // Show attendance form for selected module/filiere
                 $module_id = intval($_GET['module_id']);
