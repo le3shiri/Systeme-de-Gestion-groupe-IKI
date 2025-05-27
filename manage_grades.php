@@ -136,12 +136,13 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
 </head>
 <body class="dashboard-page">
     <!-- Top Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark <?php echo $navbar_color; ?> fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top border-bottom shadow-sm <?php echo $navbar_color; ?>">
         <div class="container-fluid">
             <!-- Brand -->
             <a class="navbar-brand d-flex align-items-center" href="<?php echo $dashboard_link; ?>">
-                <i class="fas fa-graduation-cap me-2"></i>
-                <span class="fw-bold">Groupe IKI</span>
+                <!-- <i class="fas fa-graduation-cap me-2"></i> -->
+                <!-- <span class="fw-bold">Groupe IKI</span> -->
+                <img src="assets/logo-circle.jpg" alt="" width="120px">
             </a>
 
             <!-- Mobile Toggle -->
@@ -618,4 +619,3 @@ function selectFiliere(filiereId) {
     <script src="js/scripts.js"></script>
 </body>
 </html>
-    
