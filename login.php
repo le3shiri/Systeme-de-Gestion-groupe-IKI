@@ -51,15 +51,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
             
             // Check in teachers table
-            $stmt = $pdo->prepare("SELECT cni, password FROM teachers WHERE cni = ?");
+            $stmt = $pdo->prepare("SELECT cni, password, account_status FROM teachers WHERE cni = ?");
             $stmt->execute([$cni]);
             $teacher = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if ($teacher && password_verify($password, $teacher['password'])) {
-                $_SESSION['user_cni'] = $cni;
-                $_SESSION['role'] = 'teacher';
-                header('Location: dashboard_teacher.php');
-                exit();
+                // Check if account is active
+                if ($teacher['account_status'] === 'suspended') {
+                    $error_message = 'Your account has been suspended. Please contact the administrator.';
+                } else {
+                    $_SESSION['user_cni'] = $cni;
+                    $_SESSION['role'] = 'teacher';
+                    header('Location: dashboard_teacher.php');
+                    exit();
+                }
             }
             
             // Check in students table

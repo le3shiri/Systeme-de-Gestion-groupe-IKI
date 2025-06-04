@@ -137,6 +137,33 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_user'])) {
     }
 }
 
+// Handle account status change
+if (isset($_GET['status_action']) && isset($_GET['cni']) && $_GET['status_action'] && $_GET['cni']) {
+    $status_action = $_GET['status_action'];
+    $teacher_cni = $_GET['cni'];
+    
+    if ($status_action === 'suspend' || $status_action === 'activate') {
+        try {
+            $new_status = ($status_action === 'suspend') ? 'suspended' : 'active';
+            
+            $stmt = $pdo->prepare("UPDATE teachers SET account_status = ? WHERE cni = ?");
+            $stmt->execute([$new_status, $teacher_cni]);
+            
+            if ($stmt->rowCount() > 0) {
+                $action_text = ($status_action === 'suspend') ? 'suspended' : 'activated';
+                $success_message = "Teacher account has been {$action_text} successfully!";
+            } else {
+                $error_message = 'Teacher not found or status unchanged.';
+            }
+            
+        } catch (PDOException $e) {
+            $error_message = 'Error updating teacher status: ' . $e->getMessage();
+        }
+    } else {
+        $error_message = 'Invalid status action.';
+    }
+}
+
 // Handle update operation
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_user'])) {
     $update_cni = trim($_POST['update_cni'] ?? '');
@@ -261,7 +288,7 @@ if ($current_section === 'students' && in_array($current_action, ['edit', 'delet
 
 // Fetch teachers when needed with filters
 $teachers = [];
-if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delete'])) {
+if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delete', 'hold'])) {
     try {
         // Build the WHERE clause based on filters
         $where_conditions = [];
@@ -657,6 +684,22 @@ if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delet
                                 </p>
                                 <a href="?section=teachers&action=assign" class="btn btn-warning">
                                     <i class="fas fa-user-tie me-2"></i>Manage Assignments
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100 shadow-sm hover-card">
+                            <div class="card-body text-center p-4">
+                                <div class="mb-3">
+                                    <i class="fas fa-user-lock fa-3x text-warning"></i>
+                                </div>
+                                <h5 class="card-title text-warning mb-3">Hold Accounts</h5>
+                                <p class="card-text text-muted mb-4">
+                                    Temporarily suspend or reactivate teacher accounts.
+                                </p>
+                                <a href="?section=teachers&action=hold" class="btn btn-warning">
+                                    <i class="fas fa-user-lock me-2"></i>Manage Account Status
                                 </a>
                             </div>
                         </div>
@@ -1110,10 +1153,7 @@ if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delet
                                     <option value="Freelance" <?php echo (isset($_GET['filter_contract']) && $_GET['filter_contract'] == 'Freelance') ? 'selected' : ''; ?>>
                                         Freelance
                                     </option>
-                                    <option value="Part-time" <?php echo (isset($_GET['filter_contract']) && $_GET['filter_contract'] == 'Part-time') ? 'selected' : ''; ?>>
-                                        Part-time
-                                    </option>
-                                </select>
+                                    </select>
                             </div>
                             
                             <div class="col-md-3">
@@ -1470,9 +1510,6 @@ if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delet
                                     <option value="Freelance" <?php echo (isset($_GET['filter_contract']) && $_GET['filter_contract'] == 'Freelance') ? 'selected' : ''; ?>>
                                         Freelance
                                     </option>
-                                    <option value="Part-time" <?php echo (isset($_GET['filter_contract']) && $_GET['filter_contract'] == 'Part-time') ? 'selected' : ''; ?>>
-                                        Part-time
-                                    </option>
                                 </select>
                             </div>
                             
@@ -1603,421 +1640,248 @@ if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delet
                     </div>
                 </div>
 
-                <?php elseif ($current_section === 'teachers' && $current_action === 'assign'): ?>
-                <!-- Teacher Assignment Management -->
+                <?php elseif ($current_section === 'teachers' && $current_action === 'hold'): ?>
+                <!-- Hold Teacher Accounts -->
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h2 class="text-warning">
-                        <i class="fas fa-user-tie me-2"></i>
-                        Teacher Module Assignments
+                        <i class="fas fa-user-lock me-2"></i>
+                        Hold Teacher Accounts
                     </h2>
                     <a href="?section=teachers" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left me-2"></i>Back to Teacher Management
                     </a>
                 </div>
 
-                <?php
-                // Check if teacher_module_assignments table exists, if not create it
-                try {
-                    $stmt = $pdo->query("SHOW TABLES LIKE 'teacher_module_assignments'");
-                    if ($stmt->rowCount() == 0) {
-                        // Create the table
-                        $pdo->exec("
-                            CREATE TABLE teacher_module_assignments (
-                                id INT PRIMARY KEY AUTO_INCREMENT,
-                                teacher_cni VARCHAR(50) NOT NULL,
-                                module_id INT NOT NULL,
-                                filiere_id INT NOT NULL,
-                                assigned_date DATE DEFAULT (CURRENT_DATE),
-                                is_active BOOLEAN DEFAULT TRUE,
-                                FOREIGN KEY (teacher_cni) REFERENCES teachers(cni) ON DELETE CASCADE,
-                                FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE,
-                                FOREIGN KEY (filiere_id) REFERENCES filieres(id) ON DELETE CASCADE,
-                                UNIQUE KEY unique_assignment (teacher_cni, module_id, filiere_id)
-                            )
-                        ");
-                        $success_message = 'Teacher assignments table created successfully!';
-                    }
-                } catch (PDOException $e) {
-                    $error_message = 'Error creating assignments table: ' . $e->getMessage();
-                }
-
-                // Handle assignment form submission
-                if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_teacher'])) {
-                    $teacher_cni = trim($_POST['teacher_cni'] ?? '');
-                    $module_id = intval($_POST['module_id'] ?? 0);
-                    $filiere_id = intval($_POST['filiere_id'] ?? 0);
-                    
-                    if (empty($teacher_cni) || empty($module_id) || empty($filiere_id)) {
-                        $error_message = 'Please fill in all required fields.';
-                    } else {
-                        try {
-                            // Check if module belongs to the selected filiere
-                            $stmt = $pdo->prepare("SELECT id FROM modules WHERE id = ? AND filiere_id = ?");
-                            $stmt->execute([$module_id, $filiere_id]);
-                            
-                            if ($stmt->rowCount() == 0) {
-                                $error_message = 'Selected module does not belong to the selected filière.';
-                            } else {
-                                // Insert assignment
-                                $stmt = $pdo->prepare("
-                                    INSERT INTO teacher_module_assignments (teacher_cni, module_id, filiere_id) 
-                                    VALUES (?, ?, ?)
-                                ");
-                                $stmt->execute([$teacher_cni, $module_id, $filiere_id]);
-                                $success_message = 'Teacher assignment created successfully!';
-                            }
-                            
-                        } catch (PDOException $e) {
-                            if ($e->getCode() == 23000) {
-                                $error_message = 'This teacher is already assigned to this module in this filière.';
-                            } else {
-                                $error_message = 'Error creating assignment: ' . $e->getMessage();
-                            }
-                        }
-                    }
-                }
-
-                // Handle remove assignment
-                if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['remove_assignment'])) {
-                    $assignment_id = intval($_POST['assignment_id'] ?? 0);
-                    
-                    if (empty($assignment_id)) {
-                        $error_message = 'Invalid assignment ID.';
-                    } else {
-                        try {
-                            $stmt = $pdo->prepare("DELETE FROM teacher_module_assignments WHERE id = ?");
-                            $stmt->execute([$assignment_id]);
-                            $success_message = 'Assignment removed successfully!';
-                            
-                        } catch (PDOException $e) {
-                            $error_message = 'Error removing assignment: ' . $e->getMessage();
-                        }
-                    }
-                }
-
-                // Get current assignments
-                try {
-                    $stmt = $pdo->query("
-                        SELECT 
-                            tma.id,
-                            tma.teacher_cni,
-                            tma.assigned_date,
-                            t.nom as teacher_nom,
-                            t.prenom as teacher_prenom,
-                            m.name as module_name,
-                            f.name as filiere_name
-                        FROM teacher_module_assignments tma
-                        JOIN teachers t ON tma.teacher_cni = t.cni
-                        JOIN modules m ON tma.module_id = m.id
-                        JOIN filieres f ON tma.filiere_id = f.id
-                        WHERE tma.is_active = TRUE
-                        ORDER BY t.nom, t.prenom, f.name, m.name
-                    ");
-                    $assignments = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                } catch (PDOException $e) {
-                    $assignments = [];
-                }
-                ?>
-
-                <div class="row">
-                    <!-- Assignment Form -->
-                    <div class="col-lg-4">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">
-                                    <i class="fas fa-plus me-2"></i>
-                                    Assign Teacher to Module
-                                </h5>
-                            </div>
-                            <div class="card-body">
-                                <form method="POST" action="?section=teachers&action=assign" id="assignmentForm">
-                                    <input type="hidden" name="assign_teacher" value="1">
-                                    
-                                    <div class="mb-3">
-                                        <label for="teacher_cni" class="form-label">
-                                            <i class="fas fa-chalkboard-teacher me-2"></i>Teacher *
-                                        </label>
-                                        <select class="form-select" id="teacher_cni" name="teacher_cni" required>
-                                            <option value="">Select Teacher</option>
-                                            <?php
-                                            // Get all teachers for assignment
-                                            try {
-                                                $stmt = $pdo->query("SELECT cni, nom, prenom FROM teachers ORDER BY nom, prenom");
-                                                $all_teachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                                                foreach ($all_teachers as $teacher): ?>
-                                                <option value="<?php echo htmlspecialchars($teacher['cni']); ?>">
-                                                    <?php echo htmlspecialchars($teacher['prenom'] . ' ' . $teacher['nom'] . ' (' . $teacher['cni'] . ')'); ?>
-                                                </option>
-                                                <?php endforeach;
-                                            } catch (PDOException $e) {
-                                                // Handle error silently
-                                            }
-                                            ?>
-                                        </select>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="assignment_filiere_id" class="form-label">
-                                            <i class="fas fa-graduation-cap me-2"></i>Filière *
-                                        </label>
-                                        <select class="form-select" id="assignment_filiere_id" name="filiere_id" required onchange="updateAssignmentModules()">
-                                            <option value="">Select Filière</option>
-                                            <?php foreach ($filieres as $filiere): ?>
-                                            <option value="<?php echo $filiere['id']; ?>">
-                                                <?php echo htmlspecialchars($filiere['name']); ?>
-                                            </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="assignment_module_id" class="form-label">
-                                            <i class="fas fa-book me-2"></i>Module *
-                                        </label>
-                                        <select class="form-select" id="assignment_module_id" name="module_id" required disabled>
-                                            <option value="">Select Filière first</option>
-                                        </select>
-                                    </div>
-
-                                    <div class="d-grid">
-                                        <button type="submit" class="btn btn-warning">
-                                            <i class="fas fa-plus me-2"></i>Assign Teacher
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Current Assignments -->
-                    <div class="col-lg-8">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">
-                                    <i class="fas fa-list me-2"></i>
-                                    Current Teacher Assignments
-                                </h5>
-                            </div>
-                            <div class="card-body">
-                                <?php if (empty($assignments)): ?>
-                                <div class="text-center py-5">
-                                    <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
-                                    <h5 class="text-muted">No teacher assignments found</h5>
-                                    <p class="text-muted">Start by assigning teachers to modules.</p>
-                                </div>
-                                <?php else: ?>
-                                <div class="table-responsive">
-                                    <table class="table table-hover">
-                                        <thead class="table-warning">
-                                            <tr>
-                                                <th>Teacher</th>
-                                                <th>Filière</th>
-                                                <th>Module</th>
-                                                <th>Assigned Date</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php foreach ($assignments as $assignment): ?>
-                                            <tr>
-                                                <td>
-                                                    <div>
-                                                        <strong><?php echo htmlspecialchars($assignment['teacher_prenom'] . ' ' . $assignment['teacher_nom']); ?></strong>
-                                                    </div>
-                                                    <small class="text-muted"><?php echo htmlspecialchars($assignment['teacher_cni']); ?></small>
-                                                </td>
-                                                <td>
-                                                    <span class="badge bg-info">
-                                                        <?php echo htmlspecialchars($assignment['filiere_name']); ?>
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <i class="fas fa-book me-2 text-primary"></i>
-                                                    <?php echo htmlspecialchars($assignment['module_name']); ?>
-                                                </td>
-                                                <td>
-                                                    <?php echo date('d/m/Y', strtotime($assignment['assigned_date'])); ?>
-                                                </td>
-                                                <td>
-                                                    <button type="button" 
-                                                            class="btn btn-sm btn-danger" 
-                                                            onclick="confirmRemoveAssignment(<?php echo $assignment['id']; ?>, '<?php echo htmlspecialchars($assignment['teacher_prenom'] . ' ' . $assignment['teacher_nom']); ?>', '<?php echo htmlspecialchars($assignment['module_name']); ?>', '<?php echo htmlspecialchars($assignment['filiere_name']); ?>')">
-                                                        <i class="fas fa-trash me-1"></i>Remove
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                            <?php endforeach; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Account Status Management:</strong> You can temporarily suspend teacher accounts to prevent login access without deleting their data. Suspended teachers cannot log in until their account is reactivated.
                 </div>
 
-                <!-- Teacher Summary -->
-                <div class="row mt-4">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">
-                                    <i class="fas fa-chart-bar me-2"></i>
-                                    Teacher Assignment Summary
-                                </h5>
-                            </div>
-                            <div class="card-body">
-                                <?php
-                                // Group assignments by teacher
-                                $teacher_summary = [];
-                                foreach ($assignments as $assignment) {
-                                    $teacher_key = $assignment['teacher_cni'];
-                                    if (!isset($teacher_summary[$teacher_key])) {
-                                        $teacher_summary[$teacher_key] = [
-                                            'name' => $assignment['teacher_prenom'] . ' ' . $assignment['teacher_nom'],
-                                            'cni' => $assignment['teacher_cni'],
-                                            'assignments' => []
-                                        ];
-                                    }
-                                    $teacher_summary[$teacher_key]['assignments'][] = [
-                                        'filiere' => $assignment['filiere_name'],
-                                        'module' => $assignment['module_name']
-                                    ];
-                                }
-                                ?>
-                                
-                                <?php if (empty($teacher_summary)): ?>
-                                <div class="text-center py-3">
-                                    <i class="fas fa-info-circle fa-2x text-muted mb-2"></i>
-                                    <p class="text-muted">No assignments to summarize.</p>
-                                </div>
-                                <?php else: ?>
-                                <div class="row">
-                                    <?php foreach ($teacher_summary as $teacher): ?>
-                                    <div class="col-md-6 col-lg-4 mb-3">
-                                        <div class="card h-100">
-                                            <div class="card-body">
-                                                <h6 class="card-title">
-                                                    <i class="fas fa-user me-2"></i>
-                                                    <?php echo htmlspecialchars($teacher['name']); ?>
-                                                </h6>
-                                                <p class="card-text">
-                                                    <small class="text-muted">CNI: <?php echo htmlspecialchars($teacher['cni']); ?></small>
-                                                </p>
-                                                <div class="mb-2">
-                                                    <span class="badge bg-warning">
-                                                        <?php echo count($teacher['assignments']); ?> Assignment(s)
-                                                    </span>
-                                                </div>
-                                                <div class="assignment-list">
-                                                    <?php foreach ($teacher['assignments'] as $assignment): ?>
-                                                    <div class="mb-1">
-                                                        <small>
-                                                            <i class="fas fa-book me-1"></i>
-                                                            <?php echo htmlspecialchars($assignment['module']); ?>
-                                                            <span class="text-muted">in <?php echo htmlspecialchars($assignment['filiere']); ?></span>
-                                                        </small>
-                                                    </div>
-                                                    <?php endforeach; ?>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <?php endforeach; ?>
-                                </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
+                <!-- Teacher Status Filters -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-filter me-2"></i>
+                            Filter Teachers by Status
+                        </h6>
                     </div>
-                </div>
-
-                <!-- Remove Assignment Modal -->
-                <div class="modal fade" id="removeAssignmentModal" tabindex="-1">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title text-danger">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>
-                                    Confirm Remove Assignment
-                                </h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="card-body">
+                        <form method="GET" action="" class="row g-3">
+                            <input type="hidden" name="section" value="teachers">
+                            <input type="hidden" name="action" value="hold">
+                            
+                            <div class="col-md-3">
+                                <label for="status_filter" class="form-label">Account Status</label>
+                                <select class="form-select" id="status_filter" name="status_filter">
+                                    <option value="">All Statuses</option>
+                                    <option value="active" <?php echo (isset($_GET['status_filter']) && $_GET['status_filter'] == 'active') ? 'selected' : ''; ?>>
+                                        Active
+                                    </option>
+                                    <option value="suspended" <?php echo (isset($_GET['status_filter']) && $_GET['status_filter'] == 'suspended') ? 'selected' : ''; ?>>
+                                        Suspended
+                                    </option>
+                                </select>
                             </div>
-                            <div class="modal-body">
-                                <p>Are you sure you want to remove this assignment?</p>
-                                <div class="alert alert-warning">
-                                    <strong id="assignment_info"></strong>
-                                </div>
-                                <p class="text-muted">This action cannot be undone.</p>
+                            
+                            <div class="col-md-4">
+                                <label for="search" class="form-label">Search</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="search" 
+                                       name="search" 
+                                       placeholder="Name, CNI, or Email"
+                                       value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>">
                             </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <form method="POST" action="?section=teachers&action=assign" style="display: inline;">
-                                    <input type="hidden" name="remove_assignment" value="1">
-                                    <input type="hidden" name="assignment_id" id="remove_assignment_id">
-                                    <button type="submit" class="btn btn-danger">
-                                        <i class="fas fa-trash me-2"></i>Remove Assignment
+                            
+                            <div class="col-md-3">
+                                <label for="filter_contract" class="form-label">Contract Type</label>
+                                <select class="form-select" id="filter_contract" name="filter_contract">
+                                    <option value="">All Contracts</option>
+                                    <option value="CDI" <?php echo (isset($_GET['filter_contract']) && $_GET['filter_contract'] == 'CDI') ? 'selected' : ''; ?>>
+                                        CDI (Permanent)
+                                    </option>
+                                    <option value="CDD" <?php echo (isset($_GET['filter_contract']) && $_GET['filter_contract'] == 'CDD') ? 'selected' : ''; ?>>
+                                        CDD (Fixed-term)
+                                    </option>
+                                    <option value="Freelance" <?php echo (isset($_GET['filter_contract']) && $_GET['filter_contract'] == 'Freelance') ? 'selected' : ''; ?>>
+                                        Freelance
+                                    </option>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-2 d-flex align-items-end">
+                                <div class="btn-group w-100" role="group">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-search me-1"></i>Filter
                                     </button>
-                                </form>
+                                    <a href="?section=teachers&action=hold" class="btn btn-outline-secondary">
+                                        <i class="fas fa-times me-1"></i>Clear
+                                    </a>
+                                </div>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 </div>
 
-                <script>
-                // Get modules data for dynamic loading
                 <?php
-                try {
-                    $stmt = $pdo->query("
-                        SELECT m.id, m.name, m.filiere_id, f.name as filiere_name
-                        FROM modules m
-                        JOIN filieres f ON m.filiere_id = f.id
-                        ORDER BY f.name, m.name
-                    ");
-                    $assignment_modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                    echo "const assignmentModulesData = " . json_encode($assignment_modules) . ";";
-                } catch (PDOException $e) {
-                    echo "const assignmentModulesData = [];";
-                }
-                ?>
+// Fetch teachers with status filtering for hold action
+$hold_teachers = [];
+try {
+    // Build the WHERE clause based on filters
+    $where_conditions = [];
+    $params = [];
+    
+    // Filter by status
+    if (!empty($_GET['status_filter'])) {
+        $where_conditions[] = "t.account_status = ?";
+        $params[] = $_GET['status_filter'];
+    }
+    
+    // Filter by contract type
+    if (!empty($_GET['filter_contract'])) {
+        $where_conditions[] = "t.type_contrat = ?";
+        $params[] = $_GET['filter_contract'];
+    }
+    
+    // Search by name or CNI
+    if (!empty($_GET['search'])) {
+        $search = '%' . $_GET['search'] . '%';
+        $where_conditions[] = "(t.cni LIKE ? OR t.nom LIKE ? OR t.prenom LIKE ? OR t.email LIKE ?)";
+        $params[] = $search;
+        $params[] = $search;
+        $params[] = $search;
+        $params[] = $search;
+    }
+    
+    $where_clause = '';
+    if (!empty($where_conditions)) {
+        $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
+    }
+    
+    $sql = "
+        SELECT t.cni, t.nom, t.prenom, t.email, t.num_telephone, t.adresse,
+               t.type_contrat, t.date_embauche, t.dernier_diplome, t.account_status,
+               t.created_at
+        FROM teachers t 
+        $where_clause
+        ORDER BY t.account_status DESC, t.nom, t.prenom
+    ";
+    
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $hold_teachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $error_message = 'Error fetching teachers: ' . $e->getMessage();
+}
+?>
 
-                function updateAssignmentModules() {
-                    const filiereSelect = document.getElementById('assignment_filiere_id');
-                    const moduleSelect = document.getElementById('assignment_module_id');
-                    const selectedFiliere = filiereSelect.value;
-                    
-                    // Clear current options
-                    moduleSelect.innerHTML = '<option value="">Select Module</option>';
-                    
-                    if (selectedFiliere) {
-                        // Filter modules by selected filiere
-                        const filteredModules = assignmentModulesData.filter(module => module.filiere_id == selectedFiliere);
-                        
-                        if (filteredModules.length > 0) {
-                            filteredModules.forEach(module => {
-                                const option = document.createElement('option');
-                                option.value = module.id;
-                                option.textContent = module.name;
-                                moduleSelect.appendChild(option);
-                            });
-                            moduleSelect.disabled = false;
-                        } else {
-                            moduleSelect.innerHTML = '<option value="">No modules available</option>';
-                            moduleSelect.disabled = true;
-                        }
-                    } else {
-                        moduleSelect.innerHTML = '<option value="">Select Filière first</option>';
-                        moduleSelect.disabled = true;
-                    }
-                }
-
-                function confirmRemoveAssignment(assignmentId, teacherName, moduleName, filiereName) {
-                    document.getElementById('assignment_info').textContent = 
-                        `${teacherName} - ${moduleName} in ${filiereName}`;
-                    document.getElementById('remove_assignment_id').value = assignmentId;
-                    
-                    new bootstrap.Modal(document.getElementById('removeAssignmentModal')).show();
-                }
-                </script>
+<div class="card">
+    <div class="card-body">
+        <?php if (empty($hold_teachers)): ?>
+        <div class="text-center py-5">
+            <i class="fas fa-chalkboard-teacher fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No teachers found</h5>
+            <p class="text-muted">No teachers match your current filters.</p>
+        </div>
+        <?php else: ?>
+        
+        <!-- Status Summary -->
+        <?php
+        $active_count = count(array_filter($hold_teachers, function($t) { return $t['account_status'] === 'active'; }));
+        $suspended_count = count(array_filter($hold_teachers, function($t) { return $t['account_status'] === 'suspended'; }));
+        ?>
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h3 class="mb-0"><?php echo $active_count; ?></h3>
+                        <p class="mb-0">Active Teachers</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card bg-warning text-white">
+                    <div class="card-body text-center">
+                        <h3 class="mb-0"><?php echo $suspended_count; ?></h3>
+                        <p class="mb-0">Suspended Teachers</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-warning">
+                    <tr>
+                        <th>CNI</th>
+                        <th>Name</th>
+                        <th>Contact</th>
+                        <th>Contract</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($hold_teachers as $teacher): ?>
+                    <tr class="<?php echo $teacher['account_status'] === 'suspended' ? 'table-warning' : ''; ?>">
+                        <td><strong><?php echo htmlspecialchars($teacher['cni']); ?></strong></td>
+                        <td>
+                            <div>
+                                <?php echo htmlspecialchars($teacher['prenom'] . ' ' . $teacher['nom']); ?>
+                                <?php if ($teacher['account_status'] === 'suspended'): ?>
+                                    <i class="fas fa-lock text-warning ms-2" title="Account Suspended"></i>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <td>
+                            <?php if ($teacher['email']): ?>
+                                <div><i class="fas fa-envelope me-1"></i><?php echo htmlspecialchars($teacher['email']); ?></div>
+                            <?php endif; ?>
+                            <?php if ($teacher['num_telephone']): ?>
+                                <div><i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($teacher['num_telephone']); ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($teacher['type_contrat']): ?>
+                                <span class="badge bg-info"><?php echo htmlspecialchars($teacher['type_contrat']); ?></span>
+                            <?php else: ?>
+                                <span class="text-muted">Not set</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($teacher['account_status'] === 'active'): ?>
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check me-1"></i>Active
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-lock me-1"></i>Suspended
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($teacher['account_status'] === 'active'): ?>
+                                <button type="button" 
+                                        class="btn btn-sm btn-warning" 
+                                        onclick="confirmStatusChange('<?php echo htmlspecialchars($teacher['cni']); ?>', 'suspend', '<?php echo htmlspecialchars($teacher['prenom'] . ' ' . $teacher['nom']); ?>')">
+                                    <i class="fas fa-lock me-1"></i>Suspend
+                                </button>
+                            <?php else: ?>
+                                <button type="button" 
+                                        class="btn btn-sm btn-success" 
+                                        onclick="confirmStatusChange('<?php echo htmlspecialchars($teacher['cni']); ?>', 'activate', '<?php echo htmlspecialchars($teacher['prenom'] . ' ' . $teacher['nom']); ?>')">
+                                    <i class="fas fa-unlock me-1"></i>Activate
+                                </button>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
 
                 <?php endif; ?>
             </main>
@@ -2145,6 +2009,41 @@ if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delet
         </div>
     </div>
 
+    <!-- Status Change Confirmation Modal -->
+    <div class="modal fade" id="statusChangeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="statusChangeTitle">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Confirm Status Change
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="statusChangeMessage"></p>
+                    <div class="alert" id="statusChangeAlert">
+                        <strong id="teacher_status_info"></strong>
+                    </div>
+                    <p class="text-muted" id="statusChangeNote"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form method="GET" action="" style="display: inline;" id="statusChangeForm">
+                        <input type="hidden" name="section" value="teachers">
+                        <input type="hidden" name="action" value="hold">
+                        <input type="hidden" name="status_action" id="status_action_input">
+                        <input type="hidden" name="cni" id="status_cni_input">
+                        <button type="submit" class="btn" id="status_change_btn">
+                            <i class="fas fa-check me-2"></i>
+                            <span id="status_action_text">Confirm</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Custom JS -->
@@ -2204,6 +2103,43 @@ if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delet
             `;
             document.head.appendChild(style);
         });
+
+function confirmStatusChange(cni, action, name) {
+    const modal = document.getElementById('statusChangeModal');
+    const title = document.getElementById('statusChangeTitle');
+    const message = document.getElementById('statusChangeMessage');
+    const alert = document.getElementById('statusChangeAlert');
+    const info = document.getElementById('teacher_status_info');
+    const note = document.getElementById('statusChangeNote');
+    const btn = document.getElementById('status_change_btn');
+    const actionText = document.getElementById('status_action_text');
+    const actionInput = document.getElementById('status_action_input');
+    const cniInput = document.getElementById('status_cni_input');
+    
+    // Set form values
+    actionInput.value = action;
+    cniInput.value = cni;
+    
+    if (action === 'suspend') {
+        title.innerHTML = '<i class="fas fa-lock me-2"></i>Suspend Teacher Account';
+        message.textContent = 'Are you sure you want to suspend this teacher account?';
+        alert.className = 'alert alert-warning';
+        info.textContent = `${name} (${cni})`;
+        note.textContent = 'The teacher will not be able to log in until the account is reactivated.';
+        btn.className = 'btn btn-warning';
+        actionText.textContent = 'Suspend Account';
+    } else {
+        title.innerHTML = '<i class="fas fa-unlock me-2"></i>Activate Teacher Account';
+        message.textContent = 'Are you sure you want to activate this teacher account?';
+        alert.className = 'alert alert-success';
+        info.textContent = `${name} (${cni})`;
+        note.textContent = 'The teacher will be able to log in normally after activation.';
+        btn.className = 'btn btn-success';
+        actionText.textContent = 'Activate Account';
+    }
+    
+    new bootstrap.Modal(modal).show();
+}
     </script>
 </body>
 </html>
