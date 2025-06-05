@@ -158,96 +158,108 @@ try {
                 <!-- Dashboard Cards -->
                 <div class="row g-4">
                     <!-- Manage Users Card -->
-                    <div class="col-md-6 col-lg-4">
+                    <div class="col-md-6 col-xl-4">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-users fa-2x text-primary"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">Manage Users</h5>
-                                <p class="card-text">Add and manage students, teachers, and administrators.</p>
+                                <h5 class="card-title">Gestion des Utilisateurs</h5>
+                                <p class="card-text">Ajouter et gérer les étudiants, enseignants et administrateurs de la plateforme.</p>
                                 <a href="manage_users.php" class="btn btn-primary">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-arrow-right me-2"></i>Accéder
                                 </a>
                             </div>
                         </div>
                     </div>
 
                     <!-- Filières & Modules Card -->
-                    <div class="col-md-6 col-lg-4">
+                    <div class="col-md-6 col-xl-4">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-book fa-3x text-success mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-success bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-graduation-cap fa-2x text-success"></i>
+                                    </div>
                                 </div>
                                 <h5 class="card-title">Filières & Modules</h5>
-                                <p class="card-text">Manage academic programs and course modules.</p>
+                                <p class="card-text">Gérer les programmes académiques et les modules de cours de l'établissement.</p>
                                 <a href="manage_filieres_modules.php" class="btn btn-success">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-arrow-right me-2"></i>Accéder
                                 </a>
                             </div>
                         </div>
                     </div>
 
                     <!-- Manage Grades Card -->
-                    <div class="col-md-6 col-lg-4">
+                    <div class="col-md-6 col-xl-4">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-chart-line fa-3x text-warning mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-chart-line fa-2x text-warning"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">Manage Grades</h5>
-                                <p class="card-text">View and manage student grades and assessments.</p>
+                                <h5 class="card-title">Gestion des Notes</h5>
+                                <p class="card-text">Consulter et gérer les notes et évaluations des étudiants.</p>
                                 <a href="manage_grades.php" class="btn btn-warning">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-arrow-right me-2"></i>Accéder
                                 </a>
                             </div>
                         </div>
                     </div>
 
                     <!-- Manage Absences Card -->
-                    <div class="col-md-6 col-lg-4">
+                    <div class="col-md-6 col-xl-4">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-calendar-check fa-3x text-info mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-info bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-calendar-check fa-2x text-info"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">Manage Absences</h5>
-                                <p class="card-text">Record and track student attendance.</p>
+                                <h5 class="card-title">Gestion des Absences</h5>
+                                <p class="card-text">Enregistrer et suivre la présence des étudiants aux cours.</p>
                                 <a href="record_absence.php" class="btn btn-info">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-arrow-right me-2"></i>Accéder
                                 </a>
                             </div>
                         </div>
                     </div>
 
                     <!-- Send Messages Card -->
-                    <div class="col-md-6 col-lg-4">
+                    <div class="col-md-6 col-xl-4">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-paper-plane fa-3x text-danger mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-danger bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-paper-plane fa-2x text-danger"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">Send Messages</h5>
-                                <p class="card-text">Send announcements and messages to users.</p>
+                                <h5 class="card-title">Envoi de Messages</h5>
+                                <p class="card-text">Envoyer des annonces et messages aux utilisateurs de la plateforme.</p>
                                 <a href="send_message.php" class="btn btn-danger">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-arrow-right me-2"></i>Accéder
                                 </a>
                             </div>
                         </div>
                     </div>
 
                     <!-- View Messages Card -->
-                    <div class="col-md-6 col-lg-4">
+                    <div class="col-md-6 col-xl-4">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-inbox fa-3x text-secondary mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-secondary bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-inbox fa-2x text-secondary"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">View Messages</h5>
-                                <p class="card-text">View and manage system messages.</p>
+                                <h5 class="card-title">Consultation des Messages</h5>
+                                <p class="card-text">Consulter et gérer les messages du système.</p>
                                 <a href="view_messages.php" class="btn btn-secondary">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-arrow-right me-2"></i>Accéder
                                 </a>
                             </div>
                         </div>

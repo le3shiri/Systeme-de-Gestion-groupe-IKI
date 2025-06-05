@@ -279,65 +279,67 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
 <!-- Teacher's Assigned Classes -->
 <div class="row">
     <?php
-    // Get teacher's assigned modules and filieres
+    // Get teacher's assigned filieres
     $stmt = $pdo->prepare("
         SELECT DISTINCT 
-            tma.module_id, 
-            tma.filiere_id,
-            m.name as module_name,
+            f.id as filiere_id,
             f.name as filiere_name,
             f.description as filiere_description,
+            COUNT(DISTINCT tma.module_id) as module_count,
             COUNT(s.cni) as student_count
         FROM teacher_module_assignments tma
-        JOIN modules m ON tma.module_id = m.id
         JOIN filieres f ON tma.filiere_id = f.id
         LEFT JOIN students s ON s.filiere_id = f.id
         WHERE tma.teacher_cni = ? AND tma.is_active = TRUE
-        AND m.type NOT IN ('pfe', 'stage')
-        GROUP BY tma.module_id, tma.filiere_id
-        ORDER BY f.name, m.name
+        GROUP BY f.id
+        ORDER BY f.name
     ");
     $stmt->execute([$user_cni]);
-    $assignments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $filieres = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    if (empty($assignments)): ?>
+    if (empty($filieres)): ?>
     <div class="col-12">
         <div class="alert alert-warning">
             <i class="fas fa-exclamation-triangle me-2"></i>
-            <strong>No assignments found!</strong> You are not assigned to any modules yet. Please contact the administrator.
+            <strong>No assignments found!</strong> You are not assigned to any filières yet. Please contact the administrator.
         </div>
     </div>
     <?php else: ?>
     
-    <?php if (!isset($_GET['module_id']) || !isset($_GET['filiere_id'])): ?>
-    <!-- Show available assignments -->
+    <?php if (!isset($_GET['filiere_id']) && !isset($_GET['module_id'])): ?>
+    <!-- Show available filières -->
     <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-chalkboard me-2"></i>
-                    Select Your Assigned Module to Record Attendance
+                    <i class="fas fa-graduation-cap me-2"></i>
+                    Select a Filière
                 </h5>
             </div>
             <div class="card-body">
                 <div class="row">
-                    <?php foreach ($assignments as $assignment): ?>
+                    <?php foreach ($filieres as $filiere): ?>
                     <div class="col-md-6 col-lg-4 mb-3">
                         <div class="card h-100 module-card" style="cursor: pointer;" 
-                             onclick="selectModule(<?php echo $assignment['module_id']; ?>, <?php echo $assignment['filiere_id']; ?>)">
+                             onclick="selectFiliere(<?php echo $filiere['filiere_id']; ?>)">
                             <div class="card-body text-center">
                                 <div class="mb-3">
-                                    <i class="fas fa-book fa-3x text-success"></i>
+                                    <i class="fas fa-graduation-cap fa-3x text-success"></i>
                                 </div>
-                                <h6 class="card-title"><?php echo htmlspecialchars($assignment['module_name']); ?></h6>
+                                <h6 class="card-title"><?php echo htmlspecialchars($filiere['filiere_name']); ?></h6>
                                 <p class="card-text">
-                                    <strong><?php echo htmlspecialchars($assignment['filiere_name']); ?></strong><br>
-                                    <small class="text-muted"><?php echo htmlspecialchars($assignment['filiere_description']); ?></small>
+                                    <small class="text-muted"><?php echo htmlspecialchars($filiere['filiere_description'] ?: 'No description'); ?></small>
                                 </p>
-                                <span class="badge bg-success">
-                                    <i class="fas fa-users me-1"></i>
-                                    <?php echo $assignment['student_count']; ?> Students
-                                </span>
+                                <div class="d-flex justify-content-around">
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-book me-1"></i>
+                                        <?php echo $filiere['module_count']; ?> Modules
+                                    </span>
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-users me-1"></i>
+                                        <?php echo $filiere['student_count']; ?> Students
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -348,84 +350,261 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
     </div>
     <?php endif; ?>
     
+    <?php if (isset($_GET['filiere_id']) && !isset($_GET['module_id'])): ?>
+    <!-- Show modules for selected filiere -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="record_absence.php" class="text-decoration-none">
+                            <i class="fas fa-calendar-check me-1"></i>Record Attendance
+                        </a>
+                    </li>
+                    <?php
+                    // Get filiere name
+                    $filiere_id = intval($_GET['filiere_id']);
+                    $stmt = $pdo->prepare("SELECT name FROM filieres WHERE id = ?");
+                    $stmt->execute([$filiere_id]);
+                    $filiere_name = $stmt->fetchColumn();
+                    ?>
+                    <li class="breadcrumb-item active" aria-current="page">
+                        <?php echo htmlspecialchars($filiere_name); ?>
+                    </li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+    
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-book me-2"></i>
+                    Select Module for <?php echo htmlspecialchars($filiere_name); ?>
+                </h5>
+            </div>
+            <div class="card-body">
+                <?php
+                // Get teacher's assigned modules for this filiere
+                $stmt = $pdo->prepare("
+                    SELECT 
+                        tma.module_id, 
+                        m.name as module_name,
+                        COUNT(s.cni) as student_count
+                    FROM teacher_module_assignments tma
+                    JOIN modules m ON tma.module_id = m.id
+                    LEFT JOIN students s ON s.filiere_id = ?
+                    WHERE tma.teacher_cni = ? AND tma.filiere_id = ? AND tma.is_active = TRUE
+                    AND m.type NOT IN ('pfe', 'stage')
+                    GROUP BY tma.module_id
+                    ORDER BY m.name
+                ");
+                $stmt->execute([$filiere_id, $user_cni, $filiere_id]);
+                $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                if (empty($modules)): ?>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>No modules found!</strong> You are not assigned to any modules in this filière.
+                </div>
+                <?php else: ?>
+                <div class="row">
+                    <?php foreach ($modules as $module): ?>
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card h-100 module-card" style="cursor: pointer;" 
+                             onclick="selectModule(<?php echo $module['module_id']; ?>, <?php echo $filiere_id; ?>)">
+                            <div class="card-body text-center">
+                                <div class="mb-3">
+                                    <i class="fas fa-book fa-3x text-success"></i>
+                                </div>
+                                <h6 class="card-title"><?php echo htmlspecialchars($module['module_name']); ?></h6>
+                                <span class="badge bg-info">
+                                    <i class="fas fa-users me-1"></i>
+                                    <?php echo $module['student_count']; ?> Students
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    
     <?php endif; ?>
 </div>
 <?php endif; ?>
 
-                <?php if ($user_role === 'admin' && (!isset($_GET['module_id']) || !isset($_GET['filiere_id']))): ?>
-                <!-- Show available modules and filieres -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">
-                                    <i class="fas fa-chalkboard me-2"></i>
-                                    Select Module and Filière to Record Attendance
-                                </h5>
-                            </div>
-                            <div class="card-body">
-                                <?php
-                                // Get all modules and filieres
-                                try {
-                                    $stmt = $pdo->query("
-                                        SELECT 
-                                            m.id as module_id, 
-                                            m.name as module_name,
-                                            f.id as filiere_id,
-                                            f.name as filiere_name,
-                                            f.description as filiere_description,
-                                            COUNT(s.cni) as student_count
-                                        FROM modules m
-                                        JOIN filieres f ON m.filiere_id = f.id
-                                        LEFT JOIN students s ON s.filiere_id = f.id
-                                        WHERE m.type NOT IN ('pfe', 'stage')
-                                        GROUP BY m.id, f.id
-                                        ORDER BY f.name, m.name
-                                    ");
-                                    $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                                    
-                                    if (empty($modules)): ?>
-                                    <div class="alert alert-warning">
-                                        <i class="fas fa-exclamation-triangle me-2"></i>
-                                        <strong>No modules found!</strong> Please contact the administrator to set up modules and filieres.
+                <?php if ($user_role === 'admin' && (!isset($_GET['module_id']) && !isset($_GET['filiere_id']))): ?>
+<!-- Show available filieres first -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-graduation-cap me-2"></i>
+                    Select a Filière
+                </h5>
+            </div>
+            <div class="card-body">
+                <?php
+                // Get all filieres
+                try {
+                    $stmt = $pdo->query("
+                        SELECT 
+                            f.id as filiere_id,
+                            f.name as filiere_name,
+                            f.description as filiere_description,
+                            COUNT(DISTINCT m.id) as module_count,
+                            COUNT(s.cni) as student_count
+                        FROM filieres f
+                        LEFT JOIN modules m ON f.id = m.filiere_id
+                        LEFT JOIN students s ON s.filiere_id = f.id
+                        GROUP BY f.id
+                        ORDER BY f.name
+                    ");
+                    $filieres = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    if (empty($filieres)): ?>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>No filières found!</strong> Please add filières first.
+                    </div>
+                    <?php else: ?>
+                    <div class="row">
+                        <?php foreach ($filieres as $filiere): ?>
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100 module-card" style="cursor: pointer;" 
+                                 onclick="selectFiliere(<?php echo $filiere['filiere_id']; ?>)">
+                                <div class="card-body text-center">
+                                    <div class="mb-3">
+                                        <i class="fas fa-graduation-cap fa-3x text-primary"></i>
                                     </div>
-                                    <?php else: ?>
-                                    <div class="row">
-                                        <?php foreach ($modules as $module): ?>
-                                        <div class="col-md-6 col-lg-4 mb-3">
-                                            <div class="card h-100 module-card" style="cursor: pointer;" 
-                                                 onclick="selectModule(<?php echo $module['module_id']; ?>, <?php echo $module['filiere_id']; ?>)">
-                                                <div class="card-body text-center">
-                                                    <div class="mb-3">
-                                                        <i class="fas fa-book fa-3x text-primary"></i>
-                                                    </div>
-                                                    <h6 class="card-title"><?php echo htmlspecialchars($module['module_name']); ?></h6>
-                                                    <p class="card-text">
-                                                        <strong><?php echo htmlspecialchars($module['filiere_name']); ?></strong><br>
-                                                        <small class="text-muted"><?php echo htmlspecialchars($module['filiere_description']); ?></small>
-                                                    </p>
-                                                    <span class="badge bg-info">
-                                                        <i class="fas fa-users me-1"></i>
-                                                        <?php echo $module['student_count']; ?> Students
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <?php endforeach; ?>
+                                    <h6 class="card-title"><?php echo htmlspecialchars($filiere['filiere_name']); ?></h6>
+                                    <p class="card-text">
+                                        <small class="text-muted"><?php echo htmlspecialchars($filiere['filiere_description'] ?: 'No description'); ?></small>
+                                    </p>
+                                    <div class="d-flex justify-content-around">
+                                        <span class="badge bg-info">
+                                            <i class="fas fa-book me-1"></i>
+                                            <?php echo $filiere['module_count']; ?> Modules
+                                        </span>
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-users me-1"></i>
+                                            <?php echo $filiere['student_count']; ?> Students
+                                        </span>
                                     </div>
-                                    <?php endif; ?>
-                                <?php } catch (PDOException $e) { ?>
-                                <div class="alert alert-danger">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>
-                                    Error loading modules: <?php echo htmlspecialchars($e->getMessage()); ?>
                                 </div>
-                                <?php } ?>
                             </div>
                         </div>
+                        <?php endforeach; ?>
                     </div>
+                    <?php endif; ?>
+                <?php } catch (PDOException $e) { ?>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error loading filières: <?php echo htmlspecialchars($e->getMessage()); ?>
                 </div>
-                
-                <?php endif; ?>
+                <?php } ?>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($user_role === 'admin' && isset($_GET['filiere_id']) && !isset($_GET['module_id'])): ?>
+<!-- Show modules for selected filiere -->
+<div class="row mb-3">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="record_absence.php" class="text-decoration-none">
+                        <i class="fas fa-calendar-check me-1"></i>Record Attendance
+                    </a>
+                </li>
+                <?php
+                // Get filiere name
+                $filiere_id = intval($_GET['filiere_id']);
+                $stmt = $pdo->prepare("SELECT name FROM filieres WHERE id = ?");
+                $stmt->execute([$filiere_id]);
+                $filiere_name = $stmt->fetchColumn();
+                ?>
+                <li class="breadcrumb-item active" aria-current="page">
+                    <?php echo htmlspecialchars($filiere_name); ?>
+                </li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-book me-2"></i>
+                    Select Module for <?php echo htmlspecialchars($filiere_name); ?>
+                </h5>
+            </div>
+            <div class="card-body">
+                <?php
+                // Get modules for this filiere
+                try {
+                    $stmt = $pdo->prepare("
+                        SELECT 
+                            m.id as module_id,
+                            m.name as module_name,
+                            COUNT(s.cni) as student_count
+                        FROM modules m
+                        LEFT JOIN students s ON s.filiere_id = ?
+                        WHERE m.filiere_id = ? AND m.type NOT IN ('pfe', 'stage')
+                        GROUP BY m.id
+                        ORDER BY m.name
+                    ");
+                    $stmt->execute([$filiere_id, $filiere_id]);
+                    $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    if (empty($modules)): ?>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>No modules found!</strong> Please add modules to this filière first.
+                    </div>
+                    <?php else: ?>
+                    <div class="row">
+                        <?php foreach ($modules as $module): ?>
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100 module-card" style="cursor: pointer;" 
+                                 onclick="selectModule(<?php echo $module['module_id']; ?>, <?php echo $filiere_id; ?>)">
+                                <div class="card-body text-center">
+                                    <div class="mb-3">
+                                        <i class="fas fa-book fa-3x text-success"></i>
+                                    </div>
+                                    <h6 class="card-title"><?php echo htmlspecialchars($module['module_name']); ?></h6>
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-users me-1"></i>
+                                        <?php echo $module['student_count']; ?> Students
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                <?php } catch (PDOException $e) { ?>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error loading modules: <?php echo htmlspecialchars($e->getMessage()); ?>
+                </div>
+                <?php } ?>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
                 
                 <?php if (isset($_GET['module_id']) && isset($_GET['filiere_id'])): 
                 // Show attendance form for selected module/filiere
@@ -863,6 +1042,10 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
         const selectAll = document.getElementById('selectAll');
         selectAll.checked = !selectAll.checked;
         toggleAllCheckboxes();
+    }
+
+    function selectFiliere(filiereId) {
+        window.location.href = 'record_absence.php?filiere_id=' + filiereId;
     }
     </script>
 

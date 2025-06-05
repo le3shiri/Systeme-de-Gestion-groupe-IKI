@@ -159,14 +159,16 @@ try {
                     <!-- View Grades Card -->
                     <div class="col-md-6 col-lg-4">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-chart-line fa-3x text-warning mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-chart-line fa-2x text-warning"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">Check Your Grades</h5>
-                                <p class="card-text">View your academic performance and grades.</p>
+                                <h5 class="card-title">Mes Notes</h5>
+                                <p class="card-text">Consultez vos résultats académiques et votre progression.</p>
                                 <a href="view_grades.php" class="btn btn-warning">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-eye me-2"></i>Consulter
                                 </a>
                             </div>
                         </div>
@@ -175,14 +177,16 @@ try {
                     <!-- View Attendance Card -->
                     <div class="col-md-6 col-lg-4">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-calendar-check fa-3x text-success mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-success bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-calendar-check fa-2x text-success"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">View Attendance</h5>
-                                <p class="card-text">Check your attendance record and absences.</p>
+                                <h5 class="card-title">Mes Absences</h5>
+                                <p class="card-text">Vérifiez votre historique de présence et d'absences.</p>
                                 <a href="student_absences.php" class="btn btn-success">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-eye me-2"></i>Consulter
                                 </a>
                             </div>
                         </div>
@@ -191,14 +195,16 @@ try {
                     <!-- View Messages Card -->
                     <div class="col-md-6 col-lg-4">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-inbox fa-3x text-primary mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-inbox fa-2x text-primary"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">View Messages</h5>
-                                <p class="card-text">Check announcements and messages from teachers.</p>
+                                <h5 class="card-title">Mes Messages</h5>
+                                <p class="card-text">Consultez les annonces et messages de vos enseignants.</p>
                                 <a href="view_messages.php" class="btn btn-primary">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-eye me-2"></i>Consulter
                                 </a>
                             </div>
                         </div>

@@ -148,14 +148,16 @@ try {
                     <!-- Manage Grades Card -->
                     <div class="col-md-6 col-lg-6">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-chart-line fa-3x text-warning mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-chart-line fa-2x text-warning"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">Enter Grades</h5>
-                                <p class="card-text">Record and manage student grades for your modules.</p>
+                                <h5 class="card-title">Saisie des Notes</h5>
+                                <p class="card-text">Enregistrez et gérez les notes de vos étudiants pour vos modules.</p>
                                 <a href="manage_grades.php" class="btn btn-warning">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-edit me-2"></i>Accéder
                                 </a>
                             </div>
                         </div>
@@ -164,14 +166,16 @@ try {
                     <!-- Record Attendance Card -->
                     <div class="col-md-6 col-lg-6">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-calendar-check fa-3x text-info mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-info bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-calendar-check fa-2x text-info"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">Record Attendance</h5>
-                                <p class="card-text">Mark student attendance and manage absences.</p>
+                                <h5 class="card-title">Pointage des Présences</h5>
+                                <p class="card-text">Marquez la présence des étudiants et gérez les absences.</p>
                                 <a href="record_absence.php" class="btn btn-info">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-check me-2"></i>Accéder
                                 </a>
                             </div>
                         </div>
@@ -180,14 +184,16 @@ try {
                     <!-- Send Messages Card -->
                     <div class="col-md-6 col-lg-6">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-paper-plane fa-3x text-danger mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-danger bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-paper-plane fa-2x text-danger"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">Send Messages</h5>
-                                <p class="card-text">Send messages and announcements to students.</p>
+                                <h5 class="card-title">Envoi de Messages</h5>
+                                <p class="card-text">Envoyez des messages et annonces à vos étudiants.</p>
                                 <a href="send_message.php" class="btn btn-danger">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-paper-plane me-2"></i>Accéder
                                 </a>
                             </div>
                         </div>
@@ -196,14 +202,16 @@ try {
                     <!-- View Messages Card -->
                     <div class="col-md-6 col-lg-6">
                         <div class="card dashboard-card h-100">
-                            <div class="card-body text-center">
+                            <div class="card-body">
                                 <div class="card-icon">
-                                    <i class="fas fa-inbox fa-3x text-secondary mb-3"></i>
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-secondary bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-inbox fa-2x text-secondary"></i>
+                                    </div>
                                 </div>
-                                <h5 class="card-title">View Messages</h5>
-                                <p class="card-text">Check your messages and communications.</p>
+                                <h5 class="card-title">Mes Messages</h5>
+                                <p class="card-text">Consultez vos messages et communications.</p>
                                 <a href="view_messages.php" class="btn btn-secondary">
-                                    <i class="fas fa-arrow-right me-2"></i>Go
+                                    <i class="fas fa-inbox me-2"></i>Accéder
                                 </a>
                             </div>
                         </div>
