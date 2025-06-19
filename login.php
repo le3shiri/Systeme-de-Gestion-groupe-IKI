@@ -133,32 +133,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                                 <!-- Login Form -->
                                 <form method="POST" action="login.php" id="loginForm" novalidate>
-                                    <div class="mb-3">
+                                    <div class="mb-4">
                                         <label for="cni" class="form-label">
-                                            <i class="fas fa-id-card me-2"></i>CNI
+                                            <i class="fas fa-id-card text-primary"></i>CNI
                                         </label>
-                                        <input type="text" 
-                                               class="form-control form-control-lg" 
-                                               id="cni" 
-                                               name="cni" 
-                                               placeholder="Enter your CNI"
-                                               value="<?php echo $cni_value; ?>"
-                                               required>
-                                        <div class="invalid-feedback">
-                                            Please enter your CNI.
+                                        <div class="position-relative">
+                                            <input type="text" 
+                                                   class="form-control form-control-lg" 
+                                                   id="cni" 
+                                                   name="cni" 
+                                                   placeholder="Entrez votre CNI"
+                                                   value="<?php echo $cni_value; ?>"
+                                                   required>
+                                            <div class="invalid-feedback">
+                                                Veuillez saisir votre CNI.
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div class="mb-4">
+                                    <div class="mb-5">
                                         <label for="password" class="form-label">
-                                            <i class="fas fa-lock me-2"></i>Password
+                                            <i class="fas fa-lock text-primary"></i>Mot de passe
                                         </label>
                                         <div class="input-group">
                                             <input type="password" 
                                                    class="form-control form-control-lg" 
                                                    id="password" 
                                                    name="password" 
-                                                   placeholder="Enter your password"
+                                                   placeholder="Entrez votre mot de passe"
                                                    required>
                                             <button class="btn btn-outline-secondary" 
                                                     type="button" 
@@ -167,24 +169,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                             </button>
                                         </div>
                                         <div class="invalid-feedback">
-                                            Please enter your password.
+                                            Veuillez saisir votre mot de passe.
                                         </div>
                                     </div>
 
-                                    <div class="d-grid">
+                                    <div class="d-grid mb-4">
                                         <button type="submit" 
                                                 class="btn btn-primary btn-lg" 
                                                 id="loginBtn">
                                             <span class="btn-text">
-                                                <i class="fas fa-sign-in-alt me-2"></i>Login
+                                                <i class="fas fa-sign-in-alt me-2"></i>Se connecter
                                             </span>
                                             <span class="btn-loading d-none">
                                                 <span class="spinner-border spinner-border-sm me-2"></span>
-                                                Logging in...
+                                                Connexion...
                                             </span>
                                         </button>
                                     </div>
                                 </form>
+
+                                <div class="text-center">
+                                    <small class="text-muted">
+                                        <i class="fas fa-shield-alt me-1"></i>
+                                        Connexion sécurisée - Groupe IKI
+                                    </small>
+                                </div>
 
                                 <!-- Sample Credentials -->
                                 <!-- <div class="mt-4">
