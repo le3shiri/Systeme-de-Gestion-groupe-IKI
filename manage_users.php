@@ -15,6 +15,9 @@ $error_message = '';
 $current_section = isset($_GET['section']) ? $_GET['section'] : '';
 $current_action = isset($_GET['action']) ? $_GET['action'] : '';
 
+// Proceed to in-page assignment section (no redirect)
+// (do not remove this block; logic continues later)
+
 // Handle connection test
 if (isset($_GET['test_connection'])) {
     header('Location: manage_users.php');
@@ -164,6 +167,56 @@ if (isset($_GET['status_action']) && isset($_GET['cni']) && $_GET['status_action
     }
 }
 
+// Handle assignment of teacher to module
+if ($current_section === 'teachers' && $current_action === 'assign') {
+    // Handle deactivate request
+    if (isset($_GET['deactivate']) && is_numeric($_GET['deactivate'])) {
+        $deact_id = (int)$_GET['deactivate'];
+        try {
+            $stmt = $pdo->prepare("UPDATE teacher_module_assignments SET is_active = 0 WHERE id = ?");
+            $stmt->execute([$deact_id]);
+            $success_message = 'Assignment deactivated successfully!';
+        } catch (PDOException $e) {
+            $error_message = 'Error deactivating assignment: ' . $e->getMessage();
+        }
+    }
+
+    // On form submit
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['assign_teacher_module'])) {
+        $teacher_cni = trim($_POST['teacher_cni'] ?? '');
+        $module_id = (int)($_POST['module_id'] ?? 0);
+        $filiere_id = (int)($_POST['filiere_id'] ?? 0);
+        $notes = trim($_POST['notes'] ?? '');
+        if ($teacher_cni && $module_id && $filiere_id) {
+            try {
+                // Get teacher ID
+                $stmt = $pdo->prepare("SELECT id FROM teachers WHERE cni = ?");
+                $stmt->execute([$teacher_cni]);
+                $teacher = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($teacher) {
+                    $teacher_id = $teacher['id'];
+                    // Prevent duplicate active assignment
+                    $stmt = $pdo->prepare("SELECT COUNT(*) FROM teacher_module_assignments WHERE teacher_id = ? AND module_id = ? AND filiere_id = ? AND is_active = 1");
+                    $stmt->execute([$teacher_id, $module_id, $filiere_id]);
+                    if ($stmt->fetchColumn() == 0) {
+                        $stmt = $pdo->prepare("INSERT INTO teacher_module_assignments (teacher_id, teacher_cni, module_id, filiere_id, assigned_date, assigned_by_admin_cni, is_active, notes) VALUES (?,?,?,?,CURDATE(),?,1,?)");
+                        $stmt->execute([$teacher_id, $teacher_cni, $module_id, $filiere_id, $user_cni, $notes]);
+                        $success_message = 'Teacher assigned to module successfully!';
+                    } else {
+                        $error_message = 'This teacher is already assigned to the selected module.';
+                    }
+                } else {
+                    $error_message = 'Teacher not found.';
+                }
+            } catch (PDOException $e) {
+                $error_message = 'Error assigning module: ' . $e->getMessage();
+            }
+        } else {
+            $error_message = 'Please select filière and module.';
+        }
+    }
+}
+
 // Handle update operation
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_user'])) {
     $update_cni = trim($_POST['update_cni'] ?? '');
@@ -288,7 +341,7 @@ if ($current_section === 'students' && in_array($current_action, ['edit', 'delet
 
 // Fetch teachers when needed with filters
 $teachers = [];
-if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delete', 'hold'])) {
+if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delete', 'hold', 'assign'])) {
     try {
         // Build the WHERE clause based on filters
         $where_conditions = [];
@@ -1457,7 +1510,110 @@ if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delet
                     </div>
                 </div>
 
-                <?php elseif ($current_section === 'teachers' && $current_action === 'delete'): ?>
+                <?php elseif ($current_section === 'teachers' && $current_action === 'assign'): ?>
+<!-- Assign Teacher Section -->
+<?php
+    // Fetch active assignments
+    $active_assignments = [];
+    try {
+        $assign_stmt = $pdo->query("SELECT tma.id, CONCAT(t.prenom,' ',t.nom) AS teacher_name, t.cni as teacher_cni, f.name AS filiere_name, m.name AS module_name, tma.assigned_date
+                                   FROM teacher_module_assignments tma
+                                   JOIN teachers t ON t.id = tma.teacher_id
+                                   JOIN filieres f ON f.id = tma.filiere_id
+                                   JOIN modules m ON m.id = tma.module_id
+                                   WHERE tma.is_active = 1
+                                   ORDER BY t.nom, m.name");
+        $active_assignments = $assign_stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // ignore
+    }
+    // Build modules grouped by filiere for JS
+    $modulesByFiliere = [];
+    foreach ($modules as $m) {
+        $modulesByFiliere[$m['filiere_id']][] = $m;
+    }
+?>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="text-primary"><i class="fas fa-link me-2"></i>Assign Teacher to Module</h2>
+</div>
+<form method="POST" class="card p-4 mb-5">
+    <input type="hidden" name="assign_teacher_module" value="1">
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label class="form-label">Teacher</label>
+            <select name="teacher_cni" class="form-select" required>
+                <option value="">Select teacher</option>
+                <?php foreach ($teachers as $t): ?>
+                <option value="<?php echo htmlspecialchars($t['cni']); ?>">
+                    <?php echo htmlspecialchars($t['prenom'].' '.$t['nom'].' ('.$t['cni'].')'); ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Filière</label>
+            <select name="filiere_id" id="filiere_select" class="form-select" required>
+                <option value="">Select filière</option>
+                <?php foreach ($filieres as $f): ?>
+                <option value="<?php echo $f['id']; ?>"><?php echo htmlspecialchars($f['name']); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Module</label>
+            <select name="module_id" id="module_select" class="form-select" required>
+                <option value="">Select module</option>
+            </select>
+        </div>
+        <div class="col-12">
+            <label class="form-label">Notes (optional)</label>
+            <textarea name="notes" class="form-control" rows="2"></textarea>
+        </div>
+    </div>
+    <button class="btn btn-primary mt-3"><i class="fas fa-plus me-2"></i>Assign</button>
+</form>
+
+<h3>Current Active Assignments</h3>
+<table class="table table-bordered">
+    <thead>
+        <tr><th>Teacher</th><th>Filière</th><th>Module</th><th>Date</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+        <?php foreach ($active_assignments as $a): ?>
+        <tr>
+            <td><?php echo htmlspecialchars($a['teacher_name']).' ('.htmlspecialchars($a['teacher_cni']).')'; ?></td>
+            <td><?php echo htmlspecialchars($a['filiere_name']); ?></td>
+            <td><?php echo htmlspecialchars($a['module_name']); ?></td>
+            <td><?php echo htmlspecialchars($a['assigned_date']); ?></td>
+            <td>
+                <a href="?section=teachers&action=assign&deactivate=<?php echo $a['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Deactivate this assignment?');">Deactivate</a>
+            </td>
+        </tr>
+        <?php endforeach; ?>
+    </tbody>
+</table>
+
+<script>
+const modulesByFiliere = <?php echo json_encode($modulesByFiliere); ?>;
+const filiereSelect = document.getElementById('filiere_select');
+if (filiereSelect) {
+    filiereSelect.addEventListener('change', function(){
+        const fid = this.value;
+        const moduleSelect = document.getElementById('module_select');
+        moduleSelect.innerHTML = '<option value="">Select module</option>';
+        if (modulesByFiliere[fid]) {
+            modulesByFiliere[fid].forEach(function(m){
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.name;
+                moduleSelect.appendChild(opt);
+            });
+        }
+    });
+}
+</script>
+
+<?php elseif ($current_section === 'teachers' && $current_action === 'delete'): ?>
                 <!-- Delete Teachers List -->
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h2 class="text-danger">
@@ -2084,7 +2240,14 @@ try {
         
         function confirmDelete(cni, role, name) {
             document.getElementById('delete_user_info').textContent = `${name} (${cni}) - ${role.toUpperCase()}`;
-            document.getElementById('delete_confirm_link').href = `?section=${role}s&action=delete&delete_action=confirm&cni=${encodeURIComponent(cni)}&role=${encodeURIComponent(role)}`;
+            const deleteLink = document.getElementById('delete_confirm_link');
+            const url = `?section=${role}s&action=delete&delete_action=confirm&cni=${encodeURIComponent(cni)}&role=${encodeURIComponent(role)}`;
+            deleteLink.href = url;
+            // Force navigation manually to bypass global anchor smooth-scroll listener
+            deleteLink.onclick = function (e) {
+                e.preventDefault();
+                window.location.href = url;
+            };
             
             new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
         }

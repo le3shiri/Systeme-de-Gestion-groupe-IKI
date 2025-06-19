@@ -292,8 +292,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
         <div class="container-fluid">
             <!-- Brand -->
             <a class="navbar-brand d-flex align-items-center" href="<?php echo $dashboard_link; ?>">
-                <i class="fas fa-graduation-cap me-2"></i>
-                <span class="fw-bold">Groupe IKI</span>
+                <img src="assets/logo-circle.jpg" alt="" width="120px">
             </a>
 
             <!-- Mobile Toggle -->
@@ -360,12 +359,14 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                 Record Attendance
                             </a>
                         </li>
+                        <?php if ($user_role === 'admin'): ?>
                         <li class="nav-item">
                             <a class="nav-link" href="send_message.php">
                                 <i class="fas fa-paper-plane me-2"></i>
                                 Send Messages
                             </a>
                         </li>
+                        <?php endif; ?>
                         <li class="nav-item">
                             <a class="nav-link" href="view_messages.php">
                                 <i class="fas fa-inbox me-2"></i>
@@ -685,7 +686,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                                 <?php if ($module_type === 'stage' || $module_type === 'pfe'): ?>
                                                 <!-- For internship or final project modules -->
                                                 <td class="text-center">
-                                                    <input type="number" 
+                                                    <input type="text" inputmode="decimal" pattern="^\d{0,2}(\.\d{0,2})?$" 
                                                            name="grades[<?php echo $student['id']; ?>][<?php echo $module_type; ?>]" 
                                                            class="form-control grade-input mx-auto" 
                                                            min="0" 
@@ -696,7 +697,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                                 <?php elseif ($module_type === 'standard' || empty($module_type)): ?>
                                                 <!-- For standard modules with continuous assessment and final exam -->
                                                 <td class="text-center">
-                                                    <input type="number" 
+                                                    <input type="text" inputmode="decimal" pattern="^\d{0,2}(\.\d{0,2})?$" 
                                                            name="grades[<?php echo $student['id']; ?>][cc1]" 
                                                            class="form-control grade-input mx-auto" 
                                                            min="0" 
@@ -705,7 +706,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                                            value="<?php echo isset($existing_grades[$student['id']]['cc1']) ? htmlspecialchars($existing_grades[$student['id']]['cc1']) : ''; ?>">
                                                 </td>
                                                 <td class="text-center">
-                                                    <input type="number" 
+                                                    <input type="text" inputmode="decimal" pattern="^\d{0,2}(\.\d{0,2})?$" 
                                                            name="grades[<?php echo $student['id']; ?>][cc2]" 
                                                            class="form-control grade-input mx-auto" 
                                                            min="0" 
@@ -714,7 +715,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                                            value="<?php echo isset($existing_grades[$student['id']]['cc2']) ? htmlspecialchars($existing_grades[$student['id']]['cc2']) : ''; ?>">
                                                 </td>
                                                 <td class="text-center">
-                                                    <input type="number" 
+                                                    <input type="text" inputmode="decimal" pattern="^\d{0,2}(\.\d{0,2})?$" 
                                                            name="grades[<?php echo $student['id']; ?>][cc3]" 
                                                            class="form-control grade-input mx-auto" 
                                                            min="0" 
@@ -723,7 +724,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                                            value="<?php echo isset($existing_grades[$student['id']]['cc3']) ? htmlspecialchars($existing_grades[$student['id']]['cc3']) : ''; ?>">
                                                 </td>
                                                 <td class="text-center">
-                                                    <input type="number" 
+                                                    <input type="text" inputmode="decimal" pattern="^\d{0,2}(\.\d{0,2})?$" 
                                                            name="grades[<?php echo $student['id']; ?>][theorique]" 
                                                            class="form-control grade-input mx-auto" 
                                                            min="0" 
@@ -732,7 +733,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                                            value="<?php echo isset($existing_grades[$student['id']]['theorique']) ? htmlspecialchars($existing_grades[$student['id']]['theorique']) : ''; ?>">
                                                 </td>
                                                 <td class="text-center">
-                                                    <input type="number" 
+                                                    <input type="text" inputmode="decimal" pattern="^\d{0,2}(\.\d{0,2})?$" 
                                                            name="grades[<?php echo $student['id']; ?>][pratique]" 
                                                            class="form-control grade-input mx-auto" 
                                                            min="0" 
@@ -771,6 +772,16 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
+    </script>
+    <script>
+        // Allow only numbers and decimal point in grade inputs
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.grade-input').forEach(inp => {
+                inp.addEventListener('input', () => {
+                    inp.value = inp.value.replace(/[^0-9.]/g, '');
+                });
+            });
         });
     </script>
 </body>

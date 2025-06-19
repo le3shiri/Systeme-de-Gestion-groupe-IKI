@@ -69,17 +69,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_attendance'])) 
         
         // Insert attendance records for absent students only
         if (!empty($absent_students)) {
+            // Prepare insert statement for absences
             $stmt = $pdo->prepare("
                 INSERT INTO absences (student_id, module_id, date, status, recorded_by_teacher_id, recorded_by_admin_id) 
                 VALUES (?, ?, ?, 'absent', ?, ?)
             ");
+            
+            // Resolve teacher ID once (FK expects teacher primary key, not CNI)
+            $teacher_id_for_fk = null;
+            if ($user_role === 'teacher') {
+                $teacher_id_stmt = $pdo->prepare("SELECT id FROM teachers WHERE cni = ?");
+                $teacher_id_stmt->execute([$user_cni]);
+                $teacher_id_for_fk = $teacher_id_stmt->fetchColumn();
+                if (!$teacher_id_for_fk) {
+                    throw new Exception("Teacher ID not found for CNI: $user_cni");
+                }
+            }
             
             foreach ($absent_students as $student_cni) {
                 // Verify student belongs to this filiere and get their ID
                 if (isset($cni_to_id_map[$student_cni])) {
                     $student_id = $cni_to_id_map[$student_cni];
                     if ($user_role === 'teacher') {
-                        $stmt->execute([$student_id, $module_id, $date, $user_cni, null]);
+                        $stmt->execute([$student_id, $module_id, $date, $teacher_id_for_fk, null]);
                     } else {
                         // Get admin ID from CNI
                         $admin_stmt = $pdo->prepare("SELECT id FROM admins WHERE cni = ?");
@@ -151,8 +163,7 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
         <div class="container-fluid">
             <!-- Brand -->
             <a class="navbar-brand d-flex align-items-center" href="<?php echo $dashboard_link; ?>">
-                <i class="fas fa-graduation-cap me-2"></i>
-                <span class="fw-bold">Groupe IKI</span>
+                <img src="assets/logo-circle.jpg" alt="" width="120px">
             </a>
 
             <!-- Mobile Toggle -->
@@ -219,12 +230,14 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                 Record Attendance
                             </a>
                         </li>
+                        <?php if ($user_role === 'admin'): ?>
                         <li class="nav-item">
                             <a class="nav-link" href="send_message.php">
                                 <i class="fas fa-paper-plane me-2"></i>
                                 Send Messages
                             </a>
                         </li>
+                        <?php endif; ?>
                         <li class="nav-item">
                             <a class="nav-link" href="view_messages.php">
                                 <i class="fas fa-inbox me-2"></i>

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 04, 2025 at 01:41 AM
+-- Generation Time: Jun 19, 2025 at 02:59 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -43,7 +43,9 @@ CREATE TABLE `absences` (
 --
 
 INSERT INTO `absences` (`id`, `student_id`, `module_id`, `date`, `status`, `recorded_by_teacher_id`, `recorded_by_admin_id`, `created_at`) VALUES
-(1, 1, 2, '2025-06-04', 'absent', NULL, 2, '2025-06-03 23:40:17');
+(1, 1, 2, '2025-06-04', 'absent', NULL, 2, '2025-06-03 23:40:17'),
+(3, 4, 11, '2025-06-19', 'absent', 3, NULL, '2025-06-19 00:51:36'),
+(4, 4, 12, '2025-06-19', 'absent', 3, NULL, '2025-06-19 00:52:02');
 
 -- --------------------------------------------------------
 
@@ -106,7 +108,8 @@ INSERT INTO `filieres` (`id`, `name`, `description`, `created_at`) VALUES
 (4, 'Comptabilité', 'Comptabilité et gestion financière', '2025-06-03 23:11:16'),
 (5, 'Développement Digital', 'Formation en développement web et mobile', '2025-06-03 23:11:40'),
 (6, 'Réseaux et Systèmes', 'Administration réseaux et systèmes informatiques', '2025-06-03 23:11:40'),
-(7, 'Gestion Commerciale', 'Techniques de vente et gestion commerciale', '2025-06-03 23:11:40');
+(7, 'Gestion Commerciale', 'Techniques de vente et gestion commerciale', '2025-06-03 23:11:40'),
+(8, 'TEST', 'TEST', '2025-06-19 00:07:54');
 
 -- --------------------------------------------------------
 
@@ -129,11 +132,17 @@ CREATE TABLE `grades` (
 --
 
 INSERT INTO `grades` (`id`, `student_id`, `module_id`, `grade_type`, `grade`, `date`, `created_at`) VALUES
-(1, 1, 2, 'cc1', 10.00, '2025-06-04', '2025-06-03 23:38:03'),
-(2, 1, 2, 'cc2', 10.00, '2025-06-04', '2025-06-03 23:38:03'),
-(3, 1, 2, 'cc3', 10.00, '2025-06-04', '2025-06-03 23:38:03'),
-(4, 1, 2, 'theorique', 10.00, '2025-06-04', '2025-06-03 23:38:03'),
-(5, 1, 2, 'pratique', 10.00, '2025-06-04', '2025-06-03 23:38:03');
+(1, 1, 2, 'cc1', 10.00, '2025-06-10', '2025-06-03 23:38:03'),
+(2, 1, 2, 'cc2', 10.00, '2025-06-10', '2025-06-03 23:38:03'),
+(3, 1, 2, 'cc3', 10.00, '2025-06-10', '2025-06-03 23:38:03'),
+(4, 1, 2, 'theorique', 10.00, '2025-06-10', '2025-06-03 23:38:03'),
+(5, 1, 2, 'pratique', 10.00, '2025-06-10', '2025-06-03 23:38:03'),
+(6, 1, 4, 'pfe', 18.00, '2025-06-04', '2025-06-03 23:54:18'),
+(13, 4, 11, 'cc1', 14.00, '2025-06-19', '2025-06-19 00:48:52'),
+(14, 4, 11, 'cc2', 14.00, '2025-06-19', '2025-06-19 00:48:52'),
+(15, 4, 11, 'cc3', 14.00, '2025-06-19', '2025-06-19 00:48:52'),
+(16, 4, 11, 'theorique', 14.00, '2025-06-19', '2025-06-19 00:48:52'),
+(17, 4, 11, 'pratique', 14.00, '2025-06-19', '2025-06-19 00:48:52');
 
 -- --------------------------------------------------------
 
@@ -152,6 +161,14 @@ CREATE TABLE `messages` (
   `type` enum('message','announcement') DEFAULT 'message',
   `is_read` tinyint(1) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `messages`
+--
+
+INSERT INTO `messages` (`id`, `sender_cni`, `target_cni`, `target_classe_id`, `module_id`, `content`, `date`, `type`, `is_read`) VALUES
+(1, 'AA123456', 'S123456', NULL, NULL, 'hey', '2025-06-04 01:09:58', 'message', 0),
+(2, 'T123456', 'S123456', NULL, NULL, 'kll', '2025-06-10 13:45:29', 'message', 0);
 
 -- --------------------------------------------------------
 
@@ -192,11 +209,6 @@ INSERT INTO `modules` (`id`, `name`, `filiere_id`, `type`, `created_at`) VALUES
 (18, 'Fiscalité', 4, 'standard', '2025-06-03 23:11:16'),
 (19, 'Projet de Fin d\'Études (PFE)', 4, 'pfe', '2025-06-03 23:11:16'),
 (20, 'Stage Professionnel', 4, 'stage', '2025-06-03 23:11:16'),
-(21, 'Programmation Web', 1, 'standard', '2025-06-03 23:11:40'),
-(22, 'Base de Données', 1, 'standard', '2025-06-03 23:11:40'),
-(23, 'Développement Mobile', 1, 'standard', '2025-06-03 23:11:40'),
-(24, 'Projet de Fin d\'Études', 1, 'pfe', '2025-06-03 23:11:40'),
-(25, 'Stage Professionnel', 1, 'stage', '2025-06-03 23:11:40'),
 (26, 'Administration Linux', 2, 'standard', '2025-06-03 23:11:40'),
 (27, 'Sécurité Réseaux', 2, 'standard', '2025-06-03 23:11:40'),
 (28, 'Virtualisation', 2, 'standard', '2025-06-03 23:11:40'),
@@ -212,7 +224,10 @@ INSERT INTO `modules` (`id`, `name`, `filiere_id`, `type`, `created_at`) VALUES
 (38, 'Projet de Fin d\'Études (PFE)', 6, 'pfe', '2025-06-03 23:12:43'),
 (39, 'Stage Professionnel', 6, 'stage', '2025-06-03 23:12:43'),
 (40, 'Projet de Fin d\'Études (PFE)', 7, 'pfe', '2025-06-03 23:12:43'),
-(41, 'Stage Professionnel', 7, 'stage', '2025-06-03 23:12:43');
+(41, 'Stage Professionnel', 7, 'stage', '2025-06-03 23:12:43'),
+(42, 'TEST', 8, 'standard', '2025-06-19 00:08:02'),
+(43, 'Projet de Fin d\'Études (PFE)', 8, 'pfe', '2025-06-19 00:08:06'),
+(44, 'Stage Professionnel', 8, 'stage', '2025-06-19 00:08:06');
 
 -- --------------------------------------------------------
 
@@ -275,9 +290,9 @@ CREATE TABLE `teachers` (
 --
 
 INSERT INTO `teachers` (`id`, `nom`, `prenom`, `cni`, `password`, `adresse`, `type_contrat`, `date_embauche`, `dernier_diplome`, `num_telephone`, `email`, `account_status`, `created_at`) VALUES
-(1, 'Alami', 'Mohammed', 'T123456', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', NULL, NULL, '2023-01-15', NULL, NULL, 'mohammed.alami@groupeiki.ma', 'active', '2025-06-03 23:11:40'),
-(2, 'Benali', 'Fatima', 'T234567', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', NULL, NULL, '2023-02-01', NULL, NULL, 'fatima.benali@groupeiki.ma', 'active', '2025-06-03 23:11:40'),
-(3, 'Chakir', 'Ahmed', 'T345678', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', NULL, NULL, '2023-03-10', NULL, NULL, 'ahmed.chakir@groupeiki.ma', 'active', '2025-06-03 23:11:40');
+(2, 'Benali', 'Fatima', 'T234567', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', NULL, NULL, '2023-02-01', NULL, NULL, 'fatima.benali@groupeiki.ma', 'suspended', '2025-06-03 23:11:40'),
+(3, 'Chakir', 'Ahmed', 'T345678', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', NULL, NULL, '2023-03-10', NULL, NULL, 'ahmed.chakir@groupeiki.ma', 'active', '2025-06-03 23:11:40'),
+(4, 'elachiri', 'mohamed', 'kb254942', '$2y$10$ZoQHiLEPAcYkU9/FAaRPdeDgFYkEWEVnTHGmgLlHkl/ElFM8KoXJ2', 'tangier birchifa', 'CDD', '2025-02-04', 'Ingénieur Électronique', '7074007425', 'teacher@teache.com', 'active', '2025-06-18 23:51:07');
 
 -- --------------------------------------------------------
 
@@ -327,12 +342,12 @@ CREATE TABLE `teacher_module_assignments` (
 --
 
 INSERT INTO `teacher_module_assignments` (`id`, `teacher_id`, `teacher_cni`, `module_id`, `filiere_id`, `assigned_date`, `assigned_by_admin_cni`, `is_active`, `notes`, `created_at`, `updated_at`) VALUES
-(1, 1, 'T123456', 1, 1, '2025-06-04', 'AA123456', 1, NULL, '2025-06-03 23:11:40', '2025-06-03 23:11:40'),
-(2, 1, 'T123456', 2, 1, '2025-06-04', 'AA123456', 1, NULL, '2025-06-03 23:11:40', '2025-06-03 23:11:40'),
 (3, 2, 'T234567', 6, 2, '2025-06-04', 'AA123456', 1, NULL, '2025-06-03 23:11:40', '2025-06-03 23:11:40'),
 (4, 2, 'T234567', 7, 2, '2025-06-04', 'AA123456', 1, NULL, '2025-06-03 23:11:40', '2025-06-03 23:11:40'),
 (5, 3, 'T345678', 11, 3, '2025-06-04', 'AA123456', 1, NULL, '2025-06-03 23:11:40', '2025-06-03 23:11:40'),
-(6, 3, 'T345678', 12, 3, '2025-06-04', 'AA123456', 1, NULL, '2025-06-03 23:11:40', '2025-06-03 23:11:40');
+(6, 3, 'T345678', 12, 3, '2025-06-04', 'AA123456', 1, NULL, '2025-06-03 23:11:40', '2025-06-03 23:11:40'),
+(7, 2, 'T234567', 17, 4, '2025-06-19', 'AA123456', 1, 'AA', '2025-06-19 00:08:29', '2025-06-19 00:08:29'),
+(8, 4, 'kb254942', 18, 4, '2025-06-19', 'AA123456', 1, 'AA', '2025-06-19 00:08:42', '2025-06-19 00:08:42');
 
 -- --------------------------------------------------------
 
@@ -434,7 +449,7 @@ ALTER TABLE `teacher_module_assignments`
 -- AUTO_INCREMENT for table `absences`
 --
 ALTER TABLE `absences`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `admins`
@@ -452,43 +467,43 @@ ALTER TABLE `classes`
 -- AUTO_INCREMENT for table `filieres`
 --
 ALTER TABLE `filieres`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `grades`
 --
 ALTER TABLE `grades`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT for table `messages`
 --
 ALTER TABLE `messages`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `modules`
 --
 ALTER TABLE `modules`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=45;
 
 --
 -- AUTO_INCREMENT for table `students`
 --
 ALTER TABLE `students`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `teachers`
 --
 ALTER TABLE `teachers`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `teacher_module_assignments`
 --
 ALTER TABLE `teacher_module_assignments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- Constraints for dumped tables

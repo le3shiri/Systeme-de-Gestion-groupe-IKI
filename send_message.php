@@ -2,7 +2,7 @@
 session_start();
 
 // Check if user is logged in and has appropriate role
-if (!isset($_SESSION['user_cni']) || !in_array($_SESSION['role'], ['admin', 'teacher'])) {
+if (!isset($_SESSION['user_cni']) || $_SESSION['role'] !== 'admin') {
     header('Location: login.php');
     exit();
 }
@@ -46,6 +46,10 @@ try {
         ORDER BY f.name, m.name
     ");
     $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Fetch teachers list
+    $stmt = $pdo->query("SELECT cni, CONCAT(prenom,' ',nom) AS full_name FROM teachers ORDER BY nom, prenom");
+    $teachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
 } catch (PDOException $e) {
     $error_message = 'Database connection failed.';
@@ -53,11 +57,12 @@ try {
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $message_type = trim($_POST['message_type'] ?? '');
+    // Message type fixed to 'announcement' for all outgoing messages
+    $message_type = 'announcement';
     $target_type = trim($_POST['target_type'] ?? '');
     $content = trim($_POST['content'] ?? '');
     
-    if (empty($message_type) || empty($target_type) || empty($content)) {
+    if (empty($target_type) || empty($content)) {
         $error_message = 'Please fill in all required fields.';
     } else {
         try {
@@ -65,22 +70,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $target_classe_id = null;
             $module_id = null;
             
+            // Force message type to announcement
+            $message_type = 'announcement';
             // Determine target based on type
-            if ($target_type === 'individual') {
+            if ($target_type === 'individual_student') {
                 $target_cni = trim($_POST['target_student'] ?? '');
                 if (empty($target_cni)) {
                     $error_message = 'Please select a student.';
+                }
+            } elseif ($target_type === 'individual_teacher') {
+                $target_cni = trim($_POST['target_teacher'] ?? '');
+                if (empty($target_cni)) {
+                    $error_message = 'Please select a teacher.';
                 }
             } elseif ($target_type === 'class') {
                 $target_classe_id = trim($_POST['target_class'] ?? '');
                 if (empty($target_classe_id)) {
                     $error_message = 'Please select a class.';
                 }
-            } elseif ($target_type === 'module') {
-                $module_id = trim($_POST['target_module'] ?? '');
-                if (empty($module_id)) {
-                    $error_message = 'Please select a module.';
-                }
+            } elseif (in_array($target_type, ['all_students','all_teachers'])) {
+                // broadcast types: keep target fields null
             }
             
             if (empty($error_message)) {
@@ -256,22 +265,9 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                             </div>
                             <div class="card-body">
                                 <form method="POST" action="send_message.php" id="messageForm" novalidate>
+                                        <input type="hidden" name="message_type" value="announcement">
                                     <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="message_type" class="form-label">
-                                                    <i class="fas fa-tag me-2"></i>Message Type *
-                                                </label>
-                                                <select class="form-select" id="message_type" name="message_type" required>
-                                                    <option value="">Select Type</option>
-                                                    <option value="message" <?php echo (($_POST['message_type'] ?? '') === 'message') ? 'selected' : ''; ?>>Personal Message</option>
-                                                    <option value="announcement" <?php echo (($_POST['message_type'] ?? '') === 'announcement') ? 'selected' : ''; ?>>Announcement</option>
-                                                </select>
-                                                <div class="invalid-feedback">
-                                                    Please select a message type.
-                                                </div>
-                                            </div>
-                                        </div>
+                                        
 
                                         <div class="col-md-6">
                                             <div class="mb-3">
@@ -280,10 +276,11 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                                 </label>
                                                 <select class="form-select" id="target_type" name="target_type" required>
                                                     <option value="">Select Target</option>
-                                                    <option value="individual" <?php echo (($_POST['target_type'] ?? '') === 'individual') ? 'selected' : ''; ?>>Individual Student</option>
+                                                    <option value="individual_student" <?php echo (($_POST['target_type'] ?? '') === 'individual_student') ? 'selected' : ''; ?>>Individual Student</option>
+                                                    <option value="individual_teacher" <?php echo (($_POST['target_type'] ?? '') === 'individual_teacher') ? 'selected' : ''; ?>>Individual Teacher</option>
                                                     <option value="class" <?php echo (($_POST['target_type'] ?? '') === 'class') ? 'selected' : ''; ?>>Entire Class</option>
-                                                    <option value="module" <?php echo (($_POST['target_type'] ?? '') === 'module') ? 'selected' : ''; ?>>Module Students</option>
-                                                    <option value="all" <?php echo (($_POST['target_type'] ?? '') === 'all') ? 'selected' : ''; ?>>All Students</option>
+                                                    <option value="all_students" <?php echo (($_POST['target_type'] ?? '') === 'all_students') ? 'selected' : ''; ?>>All Students</option>
+                                                    <option value="all_teachers" <?php echo (($_POST['target_type'] ?? '') === 'all_teachers') ? 'selected' : ''; ?>>All Teachers</option>
                                                 </select>
                                                 <div class="invalid-feedback">
                                                     Please select a target.
@@ -354,6 +351,23 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                         </div>
                                     </div>
 
+                                    <!-- Teacher Selection -->
+                                    <div id="teacherSelect" class="target-selection" style="display:none;">
+                                        <div class="mb-3">
+                                            <label for="target_teacher" class="form-label">
+                                                <i class="fas fa-chalkboard-teacher me-2"></i>Select Teacher
+                                            </label>
+                                            <select class="form-select" id="target_teacher" name="target_teacher">
+                                                <option value="">Choose a teacher</option>
+                                                <?php foreach ($teachers as $teacher): ?>
+                                                <option value="<?php echo $teacher['cni']; ?>" <?php echo (($_POST['target_teacher'] ?? '') === $teacher['cni']) ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars($teacher['full_name'].' ('.$teacher['cni'].')'); ?>
+                                                </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+
                                     <!-- Class Selection -->
                                     <div id="classTarget" class="target-selection" style="display: none;">
                                         <div class="mb-3">
@@ -366,27 +380,6 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                                                 <option value="<?php echo $filiere['id']; ?>"
                                                         <?php echo (($_POST['target_class'] ?? '') == $filiere['id']) ? 'selected' : ''; ?>>
                                                     <?php echo htmlspecialchars($filiere['name']); ?>
-                                                </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <!-- Module Selection -->
-                                    <div id="moduleTarget" class="target-selection" style="display: none;">
-                                        <div class="mb-3">
-                                            <label for="target_module" class="form-label">
-                                                <i class="fas fa-book me-2"></i>Select Module
-                                            </label>
-                                            <select class="form-select" id="target_module" name="target_module">
-                                                <option value="">Choose a module</option>
-                                                <?php foreach ($modules as $module): ?>
-                                                <option value="<?php echo $module['id']; ?>"
-                                                        <?php echo (($_POST['target_module'] ?? '') == $module['id']) ? 'selected' : ''; ?>>
-                                                    <?php echo htmlspecialchars($module['name']); ?>
-                                                    <?php if ($module['filiere_name']): ?>
-                                                        (<?php echo htmlspecialchars($module['filiere_name']); ?>)
-                                                    <?php endif; ?>
                                                 </option>
                                                 <?php endforeach; ?>
                                             </select>
@@ -450,16 +443,17 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
             targetSelections.forEach(selection => {
                 selection.style.display = 'none';
             });
+            document.getElementById('teacherSelect').style.display = 'none';
             
             // Show relevant target selection
-            if (targetType === 'individual') {
+            if (targetType === 'individual_student') {
                 document.getElementById('individualTarget').style.display = 'block';
                 // Filter students initially
                 filterStudents();
+            } else if (targetType === 'individual_teacher') {
+                document.getElementById('teacherSelect').style.display = 'block';
             } else if (targetType === 'class') {
                 document.getElementById('classTarget').style.display = 'block';
-            } else if (targetType === 'module') {
-                document.getElementById('moduleTarget').style.display = 'block';
             }
         });
         

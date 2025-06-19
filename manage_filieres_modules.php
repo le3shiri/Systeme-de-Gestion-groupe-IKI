@@ -31,14 +31,23 @@ try {
     ");
     $filieres = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Fetch modules with filiere names
-    $stmt = $pdo->query("
-        SELECT m.id, m.name, f.name as filiere_name, f.id as filiere_id
-        FROM modules m
-        LEFT JOIN filieres f ON m.filiere_id = f.id
-        ORDER BY f.name, m.name
-    ");
-    $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Handle filière filter for modules
+$filiere_filter = $_GET['filiere_filter'] ?? 'all';
+
+// Build SQL for modules with optional filière filter
+$modules_sql = "SELECT m.id, m.name, f.name AS filiere_name, f.id AS filiere_id
+                FROM modules m
+                LEFT JOIN filieres f ON m.filiere_id = f.id";
+$params = [];
+if ($filiere_filter !== 'all' && ctype_digit($filiere_filter)) {
+    $modules_sql .= " WHERE f.id = ?";
+    $params[] = $filiere_filter;
+}
+$modules_sql .= " ORDER BY f.name, m.name";
+
+$stmt = $pdo->prepare($modules_sql);
+$stmt->execute($params);
+$modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
 } catch (PDOException $e) {
     $error_message = 'Database connection failed.';
@@ -378,11 +387,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                         <!-- Modules List -->
                         <div class="card">
-                            <div class="card-header">
+                            <div class="card-header d-flex align-items-center justify-content-between">
                                 <h5 class="card-title mb-0">
                                     <i class="fas fa-book me-2"></i>
                                     Modules
                                 </h5>
+                                <form method="GET" action="manage_filieres_modules.php" class="d-flex align-items-center gap-2">
+                                    
+                                    <select id="module_filter_select" class="form-select form-select-sm" style="max-width: 220px;" name="filiere_filter">
+                                        <option value="all">All Filières</option>
+                                        <?php foreach ($filieres as $f): ?>
+                                        <option value="<?php echo $f['id']; ?>" <?php echo ($filiere_filter == $f['id']) ? 'selected' : ''; ?>><?php echo htmlspecialchars($f['name']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-search me-1"></i>Search
+                                    </button>
+                                </form>
                             </div>
                             <div class="card-body">
                                 <?php if (empty($modules)): ?>

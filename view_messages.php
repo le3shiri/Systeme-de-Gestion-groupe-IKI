@@ -195,12 +195,16 @@ if ($user_role === 'admin') {
                                 Record Attendance
                             </a>
                         </li>
+                        <?php if ($user_role === 'admin'): ?>
+
                         <li class="nav-item">
                             <a class="nav-link" href="send_message.php">
                                 <i class="fas fa-paper-plane me-2"></i>
                                 Send Messages
                             </a>
                         </li>
+                        <?php endif; ?>
+
                         <?php endif; ?>
                         
                         <?php if ($user_role === 'student'): ?>

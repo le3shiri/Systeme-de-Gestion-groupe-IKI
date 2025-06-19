@@ -8,6 +8,7 @@ if (!isset($_SESSION['user_cni']) || $_SESSION['role'] !== 'teacher') {
 }
 
 $user_cni = $_SESSION['user_cni'];
+$user_role = $_SESSION['role'];
 
 // Database connection to get teacher details
 $host = 'localhost';
@@ -108,12 +109,12 @@ try {
                                 Manage Absences
                             </a>
                         </li>
-                        <li class="nav-item">
+                        <!-- <li class="nav-item">
                             <a class="nav-link" href="send_message.php">
                                 <i class="fas fa-paper-plane me-2"></i>
                                 Send Messages
                             </a>
-                        </li>
+                        </li> -->
                         <li class="nav-item">
                             <a class="nav-link" href="view_messages.php">
                                 <i class="fas fa-inbox me-2"></i>
@@ -177,6 +178,7 @@ try {
                         </div>
                     </div>
 
+                    <?php if ($user_role === 'admin'): ?>
                     <!-- Send Messages Card -->
                     <div class="col-md-6 col-lg-6">
                         <div class="card dashboard-card h-100">
@@ -192,7 +194,7 @@ try {
                             </div>
                         </div>
                     </div>
-
+                    <?php endif; ?>
                     <!-- View Messages Card -->
                     <div class="col-md-6 col-lg-6">
                         <div class="card dashboard-card h-100">
