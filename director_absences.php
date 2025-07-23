@@ -101,14 +101,11 @@ try {
         $params[] = $date_filter;
     }
     
-    // Apply justified filter if provided
-    if (isset($_GET['justified']) && $_GET['justified'] !== '') {
-        $justified_filter = $_GET['justified'];
-        if ($justified_filter == '1') {
-            $query .= " AND a.reason IS NOT NULL AND a.reason != ''";
-        } else {
-            $query .= " AND (a.reason IS NULL OR a.reason = '')";
-        }
+    // Apply status filter if provided
+    if (isset($_GET['status']) && $_GET['status'] !== '') {
+        $status_filter = $_GET['status'];
+        $query .= " AND a.status = ?";
+        $params[] = $status_filter;
     }
     
     $query .= " ORDER BY a.created_at DESC";
@@ -122,8 +119,10 @@ try {
     $stmt = $pdo->query("
         SELECT 
             COUNT(*) as total_absences,
-            SUM(CASE WHEN reason IS NOT NULL AND reason != '' THEN 1 ELSE 0 END) as justified_absences,
-            COUNT(DISTINCT student_cni) as students_with_absences
+            SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent_count,
+            SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late_count,
+            SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present_count,
+            COUNT(DISTINCT student_id) as students_with_absences
         FROM absences
     ");
     $absence_stats = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -138,6 +137,20 @@ try {
         LIMIT 5
     ");
     $top_modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Get absences by month for the last 12 months
+    $stmt = $pdo->query("
+        SELECT 
+            DATE_FORMAT(created_at, '%Y-%m') as month,
+            DATE_FORMAT(created_at, '%b %Y') as month_name,
+            COUNT(*) as absence_count
+        FROM absences
+        WHERE created_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)
+        AND status = 'absent'
+        GROUP BY month, month_name
+        ORDER BY month ASC
+    ");
+    $monthly_absences = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
 } catch (PDOException $e) {
     $error_message = "Erreur de base de données: " . $e->getMessage();
@@ -188,22 +201,26 @@ try {
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="dashboard_director.php">
-                <img src="img/logo.png" alt="Groupe IKI Logo" height="40" class="me-2">
-                <span>Groupe IKI | Directeur</span>
+                <img src="assets/logo-circle.jpg" alt="" width="120px">
             </a>
+
+            <!-- Mobile Toggle -->
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
+
+            <!-- Navbar Items -->
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-user-circle me-1"></i> <?php echo htmlspecialchars($director['prenom'] . ' ' . $director['nom']); ?>
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-tie me-2"></i>
+                            Directeur (<?php echo htmlspecialchars($user_cni); ?>)
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="profile.php"><i class="fas fa-id-card me-2"></i>Mon Profil</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="logout.php"><i class="fas fa-sign-out-alt me-2"></i>Déconnexion</a></li>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="logout.php">
+                                <i class="fas fa-sign-out-alt me-2"></i>Déconnexion
+                            </a></li>
                         </ul>
                     </li>
                 </ul>
@@ -230,27 +247,33 @@ try {
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="director_teachers.php">
+                                <i class="fas fa-chalkboard-teacher me-2"></i>
+                                Enseignants
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="director_grades.php">
                                 <i class="fas fa-chart-line me-2"></i>
-                                Notes et Évaluations
+                                Statistiques des Notes
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link active" href="director_absences.php">
-                                <i class="fas fa-calendar-times me-2"></i>
-                                Absences
+                                <i class="fas fa-calendar-check me-2"></i>
+                                Statistiques des Absences
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="view_schedules_director.php">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Emplois du Temps
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="director_reports.php">
                                 <i class="fas fa-file-alt me-2"></i>
                                 Rapports
-                            </a>
-                        </li>
-                        <li class="nav-item mt-4">
-                            <a class="nav-link text-danger" href="logout.php">
-                                <i class="fas fa-sign-out-alt me-2"></i>
-                                Déconnexion
                             </a>
                         </li>
                     </ul>
@@ -297,18 +320,18 @@ try {
                     <div class="col-md-4">
                         <div class="card stats-card h-100 border-0">
                             <div class="card-body text-center">
-                                <div class="stats-icon bg-success text-white mx-auto">
-                                    <i class="fas fa-check-circle"></i>
+                                <div class="stats-icon bg-info text-white mx-auto">
+                                    <i class="fas fa-list-check"></i>
                                 </div>
-                                <h5 class="card-title">Absences Justifiées</h5>
+                                <h5 class="card-title">Statuts d'Absences</h5>
                                 <div class="d-flex justify-content-around mt-3">
                                     <div>
-                                        <h4 class="mb-0 fw-bold"><?php echo $absence_stats['justified_absences'] ?? 0; ?></h4>
-                                        <small class="text-muted">Justifiées</small>
+                                        <h4 class="mb-0 fw-bold"><?php echo $absence_stats['absent_count'] ?? 0; ?></h4>
+                                        <small class="text-muted"><span class="badge bg-danger">Absents</span></small>
                                     </div>
                                     <div>
-                                        <h4 class="mb-0 fw-bold"><?php echo ($absence_stats['total_absences'] ?? 0) - ($absence_stats['justified_absences'] ?? 0); ?></h4>
-                                        <small class="text-muted">Non Justifiées</small>
+                                        <h4 class="mb-0 fw-bold"><?php echo $absence_stats['late_count'] ?? 0; ?></h4>
+                                        <small class="text-muted"><span class="badge bg-warning">Retards</span></small>
                                     </div>
                                 </div>
                             </div>
@@ -388,10 +411,11 @@ try {
                                 <input type="date" class="form-control" name="date" value="<?php echo $date_filter; ?>">
                             </div>
                             <div class="col-md-2">
-                                <select name="justified" class="form-select">
-                                    <option value="">Toutes les absences</option>
-                                    <option value="1" <?php echo ($justified_filter === '1') ? 'selected' : ''; ?>>Justifiées</option>
-                                    <option value="0" <?php echo ($justified_filter === '0') ? 'selected' : ''; ?>>Non justifiées</option>
+                                <select name="status" class="form-select">
+                                    <option value="">Tous les statuts</option>
+                                    <option value="absent" <?php echo (isset($_GET['status']) && $_GET['status'] === 'absent') ? 'selected' : ''; ?>>Absent</option>
+                                    <option value="late" <?php echo (isset($_GET['status']) && $_GET['status'] === 'late') ? 'selected' : ''; ?>>Retard</option>
+                                    <option value="present" <?php echo (isset($_GET['status']) && $_GET['status'] === 'present') ? 'selected' : ''; ?>>Présent</option>
                                 </select>
                             </div>
                             <div class="col-md-1">
@@ -433,19 +457,27 @@ try {
                                                 <td><?php echo htmlspecialchars($absence['filiere_name'] ?? 'Non assigné'); ?></td>
                                                 <td><?php echo htmlspecialchars($absence['module_name'] ?? 'Non assigné'); ?></td>
                                                 <td>
-                                                    <?php if ($absence['is_justified']): ?>
-                                                        <span class="badge bg-success">Justifiée</span>
+                                                    <?php if ($absence['status'] == 'late'): ?>
+                                                        <span class="badge bg-warning">Retard</span>
+                                                    <?php elseif ($absence['status'] == 'present'): ?>
+                                                        <span class="badge bg-success">Présent</span>
                                                     <?php else: ?>
-                                                        <span class="badge bg-danger">Non justifiée</span>
+                                                        <span class="badge bg-danger">Absent</span>
                                                     <?php endif; ?>
                                                 </td>
                                                 <td>
-                                                    <?php if (!empty($absence['reason'])): ?>
-                                                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="tooltip" title="<?php echo htmlspecialchars($absence['reason']); ?>">
-                                                            Voir raison
+                                                    <?php if ($absence['status'] == 'late'): ?>
+                                                        <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="tooltip" title="Retard">
+                                                            Retard
+                                                        </button>
+                                                    <?php elseif ($absence['status'] == 'present'): ?>
+                                                        <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Présent">
+                                                            Présent
                                                         </button>
                                                     <?php else: ?>
-                                                        <span class="text-muted">Non spécifiée</span>
+                                                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="tooltip" title="Absent">
+                                                            Absent
+                                                        </button>
                                                     <?php endif; ?>
                                                 </td>
                                                 <td>
@@ -523,15 +555,36 @@ try {
                 }
             });
             
-            // Monthly Absences Chart (dummy data - would need to be replaced with actual data)
+            // Monthly Absences Chart (real data from database)
             var monthlyAbsencesCtx = document.getElementById('monthlyAbsencesChart').getContext('2d');
             var monthlyAbsencesChart = new Chart(monthlyAbsencesCtx, {
                 type: 'line',
                 data: {
-                    labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'],
+                    labels: [
+                        <?php 
+                        if (!empty($monthly_absences)) {
+                            foreach ($monthly_absences as $month_data) {
+                                echo "'" . addslashes($month_data['month_name']) . "', ";
+                            }
+                        } else {
+                            // Si aucune donnée, afficher un message
+                            echo "'Aucune donnée'";
+                        }
+                        ?>
+                    ],
                     datasets: [{
                         label: 'Absences par mois',
-                        data: [12, 19, 8, 15, 20, 14, 5, 2, 30, 25, 18, 10],
+                        data: [
+                            <?php 
+                            if (!empty($monthly_absences)) {
+                                foreach ($monthly_absences as $month_data) {
+                                    echo $month_data['absence_count'] . ", ";
+                                }
+                            } else {
+                                echo "0";
+                            }
+                            ?>
+                        ],
                         backgroundColor: 'rgba(54, 162, 235, 0.2)',
                         borderColor: 'rgba(54, 162, 235, 1)',
                         borderWidth: 2,

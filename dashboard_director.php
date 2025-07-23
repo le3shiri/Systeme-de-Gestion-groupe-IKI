@@ -96,7 +96,7 @@ try {
                CASE WHEN COUNT(DISTINCT s.cni) > 0 THEN COUNT(a.id)/COUNT(DISTINCT s.cni) ELSE 0 END as absence_rate
         FROM filieres f
         JOIN students s ON f.id = s.filiere_id
-        LEFT JOIN absences a ON a.id IS NOT NULL
+        LEFT JOIN absences a ON a.student_id = s.id
         GROUP BY f.id
         ORDER BY absence_rate DESC
     ");
@@ -131,6 +131,20 @@ try {
         ORDER BY MIN(grade)
     ");
     $grade_distribution = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Get absences by month for the last 12 months - only count records with status 'absent'
+    $stmt = $pdo->query("
+        SELECT 
+            DATE_FORMAT(created_at, '%Y-%m') as month,
+            DATE_FORMAT(created_at, '%b %Y') as month_name,
+            COUNT(*) as absence_count
+        FROM absences
+        WHERE created_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)
+        AND status = 'absent'
+        GROUP BY month, month_name
+        ORDER BY month ASC
+    ");
+    $absences_by_month = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
 } catch (PDOException $e) {
     $error_message = "Erreur de base de données: " . $e->getMessage();
@@ -490,6 +504,25 @@ try {
                         </div>
                     </div>
                 </div>
+                
+                <!-- Monthly Absences Chart -->
+                <div class="row g-4 mb-4">
+                    <div class="col-12">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-calendar-alt me-2"></i>
+                                    Absences par Mois
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container" style="height: 300px;">
+                                    <canvas id="monthlyAbsencesChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Recent Absences Table -->
                 <div class="card mb-4">
@@ -652,6 +685,62 @@ try {
                     scales: {
                         y: {
                             beginAtZero: true
+                        }
+                    }
+                }
+            });
+            <?php endif; ?>
+            
+            // Monthly Absences Chart
+            <?php if (isset($absences_by_month) && count($absences_by_month) > 0): ?>
+            var monthlyAbsencesCtx = document.getElementById('monthlyAbsencesChart').getContext('2d');
+            var monthlyAbsencesChart = new Chart(monthlyAbsencesCtx, {
+                type: 'line',
+                data: {
+                    labels: [<?php echo implode(', ', array_map(function($item) { return '"' . addslashes($item['month_name']) . '"'; }, $absences_by_month)); ?>],
+                    datasets: [{
+                        label: 'Nombre d\'absences',
+                        data: [<?php echo implode(', ', array_map(function($item) { return $item['absence_count']; }, $absences_by_month)); ?>],
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        pointBackgroundColor: 'rgba(75, 192, 192, 1)',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(tooltipItems) {
+                                    return tooltipItems[0].label;
+                                },
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y + ' absences';
+                                }
+                            }
                         }
                     }
                 }

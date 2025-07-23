@@ -56,7 +56,7 @@ try {
     $query = "
         SELECT t.*, GROUP_CONCAT(DISTINCT m.name SEPARATOR ', ') as modules
         FROM teachers t
-        LEFT JOIN teacher_modules tm ON t.id = tm.teacher_id
+        LEFT JOIN teacher_module_assignments tm ON t.id = tm.teacher_id
         LEFT JOIN modules m ON tm.module_id = m.id
         WHERE 1=1
     ";
@@ -74,7 +74,7 @@ try {
     // Apply module filter if provided
     if (isset($_GET['module']) && !empty($_GET['module'])) {
         $module_filter = $_GET['module'];
-        $query .= " AND EXISTS (SELECT 1 FROM teacher_modules tm WHERE tm.teacher_id = t.id AND tm.module_id = ?)";
+        $query .= " AND EXISTS (SELECT 1 FROM teacher_module_assignments tm WHERE tm.teacher_id = t.id AND tm.module_id = ?)";
         $params[] = $module_filter;
     }
     
@@ -94,7 +94,7 @@ try {
         SELECT 
             COUNT(DISTINCT teacher_id) as assigned_teachers,
             COUNT(DISTINCT module_id) as assigned_modules
-        FROM teacher_modules
+        FROM teacher_module_assignments
     ");
     $assignment_stats = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -148,20 +148,26 @@ try {
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="dashboard_director.php">
-                <img src="assets/logo-circle.jpg" alt="Groupe IKI Logo" height="40" class="me-2">
-                <span>Groupe IKI | Directeur</span>
+                <img src="assets/logo-circle.jpg" alt="" width="120px">
             </a>
+
+            <!-- Mobile Toggle -->
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
+
+            <!-- Navbar Items -->
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-user-circle me-1"></i> <?php echo htmlspecialchars($director['prenom'] . ' ' . $director['nom']); ?>
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-tie me-2"></i>
+                            Directeur (<?php echo htmlspecialchars($user_cni); ?>)
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="logout.php"><i class="fas fa-sign-out-alt me-2"></i>Déconnexion</a></li>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="logout.php">
+                                <i class="fas fa-sign-out-alt me-2"></i>Déconnexion
+                            </a></li>
                         </ul>
                     </li>
                 </ul>

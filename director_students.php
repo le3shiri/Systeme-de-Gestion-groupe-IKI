@@ -134,22 +134,26 @@ try {
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="dashboard_director.php">
-                <img src="img/logo.png" alt="Groupe IKI Logo" height="40" class="me-2">
-                <span>Groupe IKI | Directeur</span>
+                <img src="assets/logo-circle.jpg" alt="" width="120px">
             </a>
+
+            <!-- Mobile Toggle -->
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
+
+            <!-- Navbar Items -->
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-user-circle me-1"></i> <?php echo htmlspecialchars($director['prenom'] . ' ' . $director['nom']); ?>
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-tie me-2"></i>
+                            Directeur (<?php echo htmlspecialchars($user_cni); ?>)
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="profile.php"><i class="fas fa-id-card me-2"></i>Mon Profil</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="logout.php"><i class="fas fa-sign-out-alt me-2"></i>Déconnexion</a></li>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="logout.php">
+                                <i class="fas fa-sign-out-alt me-2"></i>Déconnexion
+                            </a></li>
                         </ul>
                     </li>
                 </ul>
@@ -176,27 +180,33 @@ try {
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="director_teachers.php">
+                                <i class="fas fa-chalkboard-teacher me-2"></i>
+                                Enseignants
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="director_grades.php">
                                 <i class="fas fa-chart-line me-2"></i>
-                                Notes et Évaluations
+                                Statistiques des Notes
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="director_absences.php">
-                                <i class="fas fa-calendar-times me-2"></i>
-                                Absences
+                                <i class="fas fa-calendar-check me-2"></i>
+                                Statistiques des Absences
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="view_schedules_director.php">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Emplois du Temps
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="director_reports.php">
                                 <i class="fas fa-file-alt me-2"></i>
                                 Rapports
-                            </a>
-                        </li>
-                        <li class="nav-item mt-4">
-                            <a class="nav-link text-danger" href="logout.php">
-                                <i class="fas fa-sign-out-alt me-2"></i>
-                                Déconnexion
                             </a>
                         </li>
                     </ul>
@@ -228,7 +238,7 @@ try {
 
                 <!-- Student Statistics Cards -->
                 <div class="row g-4 mb-4">
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <div class="card stats-card h-100 border-0">
                             <div class="card-body text-center">
                                 <div class="stats-icon bg-primary text-white mx-auto">
@@ -240,40 +250,7 @@ try {
                         </div>
                     </div>
                     
-                    <div class="col-md-4">
-                        <div class="card stats-card h-100 border-0">
-                            <div class="card-body text-center">
-                                <div class="stats-icon bg-success text-white mx-auto">
-                                    <i class="fas fa-venus-mars"></i>
-                                </div>
-                                <h5 class="card-title">Répartition par Genre</h5>
-                                <div class="d-flex justify-content-around mt-3">
-                                    <?php
-                                    $male_count = 0;
-                                    $female_count = 0;
-                                    
-                                    foreach ($students as $student) {
-                                        if (isset($student['genre']) && $student['genre'] === 'M') {
-                                            $male_count++;
-                                        } elseif (isset($student['genre']) && $student['genre'] === 'F') {
-                                            $female_count++;
-                                        }
-                                    }
-                                    ?>
-                                    <div>
-                                        <h4 class="mb-0 fw-bold"><?php echo $male_count; ?></h4>
-                                        <small class="text-muted">Hommes</small>
-                                    </div>
-                                    <div>
-                                        <h4 class="mb-0 fw-bold"><?php echo $female_count; ?></h4>
-                                        <small class="text-muted">Femmes</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <div class="card stats-card h-100 border-0">
                             <div class="card-body text-center">
                                 <div class="stats-icon bg-info text-white mx-auto">

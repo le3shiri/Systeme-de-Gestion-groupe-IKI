@@ -30,7 +30,7 @@ try {
         SELECT s.*, f.name as filiere_name 
         FROM schedules s
         JOIN filieres f ON s.filiere_id = f.id
-        ORDER BY f.name, s.is_active DESC, s.upload_date DESC
+        ORDER BY f.name, s.active DESC, s.uploaded_at DESC
     ");
     $schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
     

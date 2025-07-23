@@ -1142,13 +1142,4 @@ h6 {
   margin: 0;
 }
 
-/* Dark mode support (optional) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --gray-50: #1f2937;
-    --gray-100: #374151;
-    --gray-200: #4b5563;
-    --gray-800: #f9fafb;
-    --gray-900: #ffffff;
-  }
-}
+/* Mode clair uniquement */
