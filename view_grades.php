@@ -60,13 +60,14 @@ try {
         
         // Get all grades for the student
         $stmt = $pdo->prepare("
-            SELECT g.module_id, g.grade_type, g.grade, g.date,
+            SELECT g.module_id, g.grade_type, g.grade, g.date_recorded as date,
                    m.name as module_name, m.type as module_type,
                    f.name as filiere_name
             FROM grades g
             JOIN modules m ON g.module_id = m.id
             JOIN filieres f ON m.filiere_id = f.id
-            WHERE g.student_id = ?
+            JOIN students s ON g.student_id = s.id
+            WHERE s.cni = ?
             ORDER BY 
                 CASE 
                     WHEN m.type = 'pfe' THEN 3
@@ -75,7 +76,7 @@ try {
                 END,
                 m.name, g.grade_type
         ");
-        $stmt->execute([$student_info['id']]);
+        $stmt->execute([$student_info['cni']]);
         
         // Organize grades by module
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -172,6 +173,22 @@ function getModuleTypeBadge($module_type) {
     }
 }
 
+// Additional helper functions for component averages
+function calculateCcAverage($module_grades) {
+    $sum = 0; $count = 0;
+    foreach (['cc1','cc2','cc3'] as $cc) {
+        if (isset($module_grades[$cc])) { $sum += $module_grades[$cc]['grade']; $count++; }
+    }
+    return $count ? $sum / $count : null;
+}
+function calculateExamAverage($module_grades) {
+    $sum = 0; $count = 0;
+    foreach (['theorique','pratique'] as $ex) {
+        if (isset($module_grades[$ex])) { $sum += $module_grades[$ex]['grade']; $count++; }
+    }
+    return $count ? $sum / $count : null;
+}
+
 // Dashboard link and navbar color for student
 $dashboard_link = 'dashboard_student.php';
 $navbar_color = 'bg-info';
@@ -196,8 +213,8 @@ $user_icon = 'fa-user-graduate';
     
     <style>
         .transcript-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #ffffff;
+            color: #000;
             padding: 2rem;
             border-radius: 10px;
             margin-bottom: 2rem;
@@ -275,31 +292,75 @@ $user_icon = 'fa-user-graduate';
         }
         
         @media print {
+            /* Hide navigation & buttons */
             .navbar, .sidebar, .print-btn, .no-print {
                 display: none !important;
             }
-            
+
+            /* Force page size */
+            @page {
+                size: A4 portrait;            /* One single A4 sheet */
+                margin: 8mm;                 /* Small margins */
+            }
+
+            body {
+                -webkit-print-color-adjust: exact; /* keep brand colours */
+            }
+
             .main-content {
                 margin: 0 !important;
                 padding: 0 !important;
             }
-            
+
+            /* Card that wraps the transcript */
             .transcript-body {
                 box-shadow: none !important;
                 border: 1px solid #000;
             }
-            
+
             .transcript-header {
-                background: #333 !important;
-                -webkit-print-color-adjust: exact;
+                background: #ffffff !important;
+                padding: 1rem !important;     /* tighter */
+                font-size: 0.9rem;            /* smaller */
+            }
+
+            /* Make the grades table more compact */
+            .grade-table th,
+            .grade-table td {
+                font-size: 0.6rem !important; /* extra small */
+                padding: 0.25rem 0.15rem !important; /* tighter */
+            }
+
+            .final-average {
+                font-size: 0.9rem !important;
+            }
+
+            /* Shrink any headings */
+            h1, h2, h3, h4, h5, h6 {
+                font-size: 0.9rem !important;
+            }
+            h5, h6 {
+                font-size: 0.8rem !important;
+            }
+            /* Shrink student info / formation tables */
+            .table-borderless td,
+            .table-borderless th {
+                font-size: 0.65rem !important;
+                padding: 0.15rem 0.1rem !important;
+            }
+            /* Keep header columns side-by-side in print */
+            .transcript-header .row {
+                display: flex !important;
+                align-items: center !important;
+            }
+            .transcript-header .row > div {
+                flex: 1 1 0 !important;
+                max-width: 33.33% !important;
             }
         }
         
         .legend {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-top: 1rem;
+            display: none !important; /* removed as requested */
         }
         
         .legend-item {
@@ -317,6 +378,23 @@ $user_icon = 'fa-user-graduate';
         .exam-grade {
             font-size: 0.85rem;
             line-height: 1.2;
+        }
+
+        /* Summary & signature additions */
+        .summary-table td {
+            font-size: 0.8rem;
+            text-align: center;
+            vertical-align: middle;
+            padding: 0.4rem;
+        }
+        .signature-box {
+            border: 1px solid #000;
+            height: 100px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 0.5rem;
+            font-size: 0.85rem;
         }
     </style>
 </head>
@@ -381,6 +459,13 @@ $user_icon = 'fa-user-graduate';
                         </li>
                         
                         <li class="nav-item">
+                            <a class="nav-link" href="view_schedule.php">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Emploi du Temps
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
                             <a class="nav-link" href="view_messages.php">
                                 <i class="fas fa-inbox me-2"></i>
                                 Messages
@@ -420,17 +505,21 @@ $user_icon = 'fa-user-graduate';
                     <!-- Header -->
                     <div class="transcript-header text-center">
                         <div class="row align-items-center">
-                            <div class="col-md-3">
-                                <img src="assets/logo-circle.jpg" alt="Logo" style="max-width: 80px;" class="img-fluid">
-                            </div>
-                            <div class="col-md-6">
-                                <h2 class="mb-1">GROUPE IKI</h2>
-                                <h4 class="mb-0">RELEVÉ DES NOTES</h4>
-                                <p class="mb-0">Année Académique <?php echo date('Y') - 1; ?>-<?php echo date('Y'); ?></p>
-                            </div>
-                            <div class="col-md-3">
+                            <!-- Date on the left -->
+                            <div class="col-md-3 d-flex flex-column justify-content-center text-start">
                                 <p class="mb-0"><small>Date d'édition:</small></p>
                                 <p class="mb-0"><strong><?php echo date('d/m/Y'); ?></strong></p>
+                            </div>
+                            <!-- Logo & titles in the middle -->
+                            <div class="col-md-6 text-center">
+                                <img src="assets/logo-circle.jpg" alt="Logo" style="max-width: 80px;" class="img-fluid mb-2">
+                                <h2 class="mb-1">GROUPE IKI</h2>
+                                <h4 class="mb-0">RELEVÉ DES NOTES</h4>
+                            </div>
+                            <!-- Academic year on the right -->
+                            <div class="col-md-3 d-flex flex-column justify-content-center text-end">
+                                <p class="mb-0"><small>Année Académique</small></p>
+                                <p class="mb-0"><strong><?php echo date('Y') - 1; ?>-<?php echo date('Y'); ?></strong></p>
                             </div>
                         </div>
                     </div>
@@ -487,6 +576,11 @@ $user_icon = 'fa-user-graduate';
                             <?php 
                             $overall_total = 0;
                             $overall_coefficient = 0;
+                            // Totals for weighted component averages
+                            $cc_total_weight = 0;
+                            $cc_coeff_total = 0;
+                            $theo_total_weight = 0;
+                            $pra_total_weight = 0;
                             ?>
                             
                             <div class="table-responsive mb-4">
@@ -515,6 +609,16 @@ $user_icon = 'fa-user-graduate';
                                             $coefficient = $module_grades[array_key_first($module_grades)]['coefficient'] ?? 1;
                                             
                                             $module_average = calculateModuleAverage($module_grades, $module_type);
+                                            // accumulate component totals for standard modules
+                                            if ($module_type === 'standard' || ($module_type !== 'pfe' && $module_type !== 'stage')) {
+                                                $cc_avg_tmp = calculateCcAverage($module_grades);
+                                                $theo_grade_tmp = isset($module_grades['theorique']) ? $module_grades['theorique']['grade'] : null;
+                                                $pra_grade_tmp  = isset($module_grades['pratique']) ? $module_grades['pratique']['grade'] : null;
+                                                if ($cc_avg_tmp !== null)  { $cc_total_weight   += $cc_avg_tmp * $coefficient; }
+                                                if ($theo_grade_tmp !== null){ $theo_total_weight += $theo_grade_tmp * $coefficient; }
+                                                if ($pra_grade_tmp !== null) { $pra_total_weight  += $pra_grade_tmp * $coefficient; }
+                                                $cc_coeff_total += $coefficient;
+                                            }
                                             $grade_status = getGradeStatus($module_average);
                                             
                                             if ($module_average !== null) {
@@ -537,11 +641,7 @@ $user_icon = 'fa-user-graduate';
                                         ?>
                                         <tr class="<?php echo $row_class; ?>">
                                             <td class="module-name">
-                                                <?php echo getModuleTypeBadge($module_type); ?>
                                                 <?php echo htmlspecialchars($module_name); ?>
-                                                <?php if ($module_type === 'pfe' || $module_type === 'stage'): ?>
-                                                    <br><small class="special-note">Note finale uniquement</small>
-                                                <?php endif; ?>
                                             </td>
                                             <td class="grade-cell"><?php echo $coefficient; ?></td>
                                             
@@ -591,9 +691,28 @@ $user_icon = 'fa-user-graduate';
                                         <?php endforeach; ?>
                                     </tbody>
                                 </table>
-                            </div>
-                            
-                            <!-- Overall Average -->
+                             </div>
+
+                             <!-- Weighted Averages -->
+                             <?php
+                             $weighted_cc   = $cc_coeff_total > 0 ? $cc_total_weight   / $cc_coeff_total : 0;
+                             $weighted_exam = $cc_coeff_total > 0 ? ($theo_total_weight + $pra_total_weight) / (2 * $cc_coeff_total) : 0;
+                             $overall_avg_temp = $overall_coefficient > 0 ? $overall_total / $overall_coefficient : 0;
+                             ?>
+                             <div class="table-responsive mb-2">
+                                 <table class="table table-bordered summary-table">
+                                     <tr class="average-row">
+                                         <td class="module-name"><strong>Moyennes pondérées</strong></td>
+                                         <td class="grade-cell">-</td>
+                                         <td colspan="3" class="grade-cell"><?php echo number_format($weighted_cc, 2); ?></td>
+                                         <td colspan="2" class="grade-cell"><?php echo number_format($weighted_exam, 2); ?></td>
+                                         <td class="grade-cell"><?php echo number_format($overall_avg_temp, 2); ?></td>
+                                         <td>-</td>
+                                     </tr>
+                                 </table>
+                             </div>
+
+                             <!-- Overall Average -->
                             <?php 
                             $overall_average = $overall_coefficient > 0 ? $overall_total / $overall_coefficient : 0;
                             $overall_status = getGradeStatus($overall_average);
@@ -613,8 +732,19 @@ $user_icon = 'fa-user-graduate';
                                     </tr>
                                 </table>
                             </div>
-                            
-                            <!-- Legend -->
+
+                        
+
+                             <div class="row mt-4 mb-2">
+                                 <div class="col-6 text-center">
+                                     <div class="signature-box">Directeur Pédagogique</div>
+                                 </div>
+                                 <div class="col-6 text-center">
+                                     <div class="signature-box">Jury d’examens</div>
+                                 </div>
+                             </div>
+
+                             <!-- Legend -->
                             <div class="legend">
                                 <h6 class="mb-3"><i class="fas fa-info-circle me-2"></i>Informations importantes:</h6>
                                 <div class="row">

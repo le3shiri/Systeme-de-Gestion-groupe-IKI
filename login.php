@@ -13,6 +13,9 @@ if (isset($_SESSION['user_cni']) && isset($_SESSION['role'])) {
         case 'student':
             header('Location: dashboard_student.php');
             break;
+        case 'director':
+            header('Location: dashboard_director.php');
+            break;
     }
     exit();
 }
@@ -76,6 +79,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $_SESSION['user_cni'] = $cni;
                 $_SESSION['role'] = 'student';
                 header('Location: dashboard_student.php');
+                exit();
+            }
+            
+            // Check in directors table
+            $stmt = $pdo->prepare("SELECT cni, password FROM directors WHERE cni = ?");
+            $stmt->execute([$cni]);
+            $director = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($director && password_verify($password, $director['password'])) {
+                $_SESSION['user_cni'] = $cni;
+                $_SESSION['role'] = 'director';
+                header('Location: dashboard_director.php');
                 exit();
             }
             

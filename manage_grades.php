@@ -361,6 +361,14 @@ $dashboard_link = $user_role === 'admin' ? 'dashboard_admin.php' : 'dashboard_te
                         </li>
                         <?php if ($user_role === 'admin'): ?>
                         <li class="nav-item">
+                            <a class="nav-link" href="manage_schedules.php">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Emplois du Temps
+                            </a>
+                        </li>
+                        <?php endif; ?>
+                        <?php if ($user_role === 'admin'): ?>
+                        <li class="nav-item">
                             <a class="nav-link" href="send_message.php">
                                 <i class="fas fa-paper-plane me-2"></i>
                                 Send Messages

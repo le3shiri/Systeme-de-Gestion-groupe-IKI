@@ -196,7 +196,12 @@ if ($user_role === 'admin') {
                             </a>
                         </li>
                         <?php if ($user_role === 'admin'): ?>
-
+                        <li class="nav-item">
+                            <a class="nav-link" href="manage_schedules.php">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Emplois du Temps
+                            </a>
+                        </li>
                         <li class="nav-item">
                             <a class="nav-link" href="send_message.php">
                                 <i class="fas fa-paper-plane me-2"></i>
@@ -218,6 +223,12 @@ if ($user_role === 'admin') {
                             <a class="nav-link" href="student_absences.php">
                                 <i class="fas fa-calendar-check me-2"></i>
                                 View Absences
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="view_schedule.php">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Emploi du Temps
                             </a>
                         </li>
                         <?php endif; ?>

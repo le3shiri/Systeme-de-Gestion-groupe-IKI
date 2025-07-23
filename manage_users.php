@@ -479,6 +479,12 @@ if ($current_section === 'teachers' && in_array($current_action, ['edit', 'delet
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link active" href="setup_schedules.php">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Emplois du Temps
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="send_message.php">
                                 <i class="fas fa-paper-plane me-2"></i>
                                 Send Messages

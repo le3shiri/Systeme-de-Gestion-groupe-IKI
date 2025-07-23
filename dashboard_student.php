@@ -117,6 +117,12 @@ try {
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="view_schedule.php">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Emploi du Temps
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="view_messages.php">
                                 <i class="fas fa-inbox me-2"></i>
                                 View Messages
@@ -204,6 +210,24 @@ try {
                                 <h5 class="card-title">Mes Messages</h5>
                                 <p class="card-text">Consultez les annonces et messages de vos enseignants.</p>
                                 <a href="view_messages.php" class="btn btn-primary">
+                                    <i class="fas fa-eye me-2"></i>Consulter
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- View Schedule Card -->
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card dashboard-card h-100">
+                            <div class="card-body">
+                                <div class="card-icon">
+                                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-info bg-opacity-10 p-4 mb-3">
+                                        <i class="fas fa-calendar-alt fa-2x text-info"></i>
+                                    </div>
+                                </div>
+                                <h5 class="card-title">Emploi du Temps</h5>
+                                <p class="card-text">Consultez l'emploi du temps de votre filière.</p>
+                                <a href="view_schedule.php" class="btn btn-info text-white">
                                     <i class="fas fa-eye me-2"></i>Consulter
                                 </a>
                             </div>

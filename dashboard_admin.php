@@ -121,6 +121,12 @@ try {
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="manage_schedules.php">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Emplois du Temps
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="send_message.php">
                                 <i class="fas fa-paper-plane me-2"></i>
                                 Send Messages
