@@ -100,7 +100,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_user'])) {
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
             
             if ($role === 'student') {
-                // Student-specific fields
                 $date_naissance = !empty($_POST['date_naissance']) ? $_POST['date_naissance'] : null;
                 $lieu_naissance = trim($_POST['lieu_naissance'] ?? '');
                 $adresse = trim($_POST['adresse'] ?? '');
